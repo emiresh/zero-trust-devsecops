@@ -23,7 +23,7 @@ spec:
           metrics:
             enabled: true
           admissionWebhooks:
-            enabled: true
+            enabled: false
           config:
             use-forwarded-headers: "true"
             proxy-body-size: "100m"

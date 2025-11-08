@@ -10,7 +10,7 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
   hosts:
-    - host: my-app-dev.local
+    - host: k8.publicvm.com
       paths:
         - path: /
           pathType: Prefix
