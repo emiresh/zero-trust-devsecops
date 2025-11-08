@@ -1,8 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root-app
+  name: bootstrap-app
   namespace: argocd
+  labels:
+    app.kubernetes.io/name: bootstrap
+    app.kubernetes.io/part-of: argocd-bootstrap
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
@@ -11,6 +18,7 @@ spec:
     path: clusters/test-cluster
     directory:
       recurse: true
+      jsonnet: {}
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: argocd
@@ -18,5 +26,14 @@ spec:
     automated:
       prune: true
       selfHeal: true
+      allowEmpty: false
     syncOptions:
       - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
