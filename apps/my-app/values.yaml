@@ -1,12 +1,26 @@
-replicaCount: 1
+app:
+  name: my-app
+
+namespace: dev
+
+replicaCount: 2
+
 image:
   repository: nginx
-  tag: stable
-
-service:
-  type: ClusterIP
-  port: 80
+  tag: latest
+  pullPolicy: IfNotPresent
 
 ingress:
   enabled: true
+  name: my-app-ingress
+  className: nginx
   host: k8.publicvm.com
+  path: /
+  pathType: Prefix
+  sslRedirect: false
+  forceSslRedirect: false
+  rewriteTarget: /
+
+service:
+  name: my-app-service
+  port: 80
