@@ -8,13 +8,13 @@ service:
   port: 80
 
 ingress:
-  enabled: false
+  enabled: true
   className: "nginx"
-  annotations: {}
-    # nginx.ingress.kubernetes.io/rewrite-target: /
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
   hosts:
-    - host: my-app.local
+    - host: k8.publicvm.com
       paths:
         - path: /
           pathType: Prefix
@@ -22,4 +22,4 @@ ingress:
   tls: []
     # - secretName: my-app-tls
     #   hosts:
-    #     - my-app.local
+    #     - k8.publicvm.com
