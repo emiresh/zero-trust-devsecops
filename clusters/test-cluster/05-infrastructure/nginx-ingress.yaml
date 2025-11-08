@@ -18,7 +18,7 @@ spec:
           service:
             type: NodePort
             nodePorts:
-              http: 30380
+              http: 31143
               https: 30388
           metrics:
             enabled: true
@@ -28,8 +28,7 @@ spec:
             use-forwarded-headers: "true"
             proxy-body-size: "100m"
         defaultBackend:
-          enabled: true
-          replicaCount: 1
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: ingress-nginx
