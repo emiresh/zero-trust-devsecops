@@ -2,3 +2,17 @@ replicaCount: 1
 image:
   repository: nginx
   tag: stable
+
+# Enable ingress for dev environment
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: my-app-dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+          port: 80
+  tls: []

@@ -2,3 +2,24 @@ replicaCount: 1
 image:
   repository: nginx
   tag: stable
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: my-app.local
+      paths:
+        - path: /
+          pathType: Prefix
+          port: 80
+  tls: []
+    # - secretName: my-app-tls
+    #   hosts:
+    #     - my-app.local
