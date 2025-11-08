@@ -23,7 +23,18 @@ spec:
           metrics:
             enabled: true
           admissionWebhooks:
-            enabled: false
+            enabled: true
+            failurePolicy: Fail
+            port: 8443
+            certificate: "/usr/local/certificates/cert"
+            key: "/usr/local/certificates/key"
+            namespaceSelector: {}
+            objectSelector: {}
+            annotations: {}
+            timeoutSeconds: 10
+            admissionReviewVersions: ["v1", "v1beta1"]
+            certManager:
+              enabled: false
           config:
             use-forwarded-headers: "true"
             proxy-body-size: "100m"
