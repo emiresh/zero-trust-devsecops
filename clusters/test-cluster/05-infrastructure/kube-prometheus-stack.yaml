@@ -62,10 +62,7 @@ spec:
             annotations:
               nginx.ingress.kubernetes.io/rewrite-target: /
             hosts:
-              - host: prometheus.k8.publicvm.com
-                paths:
-                  - path: /
-                    pathType: Prefix
+              - prometheus.k8.publicvm.com
 
         # Grafana configuration
         grafana:
@@ -101,10 +98,7 @@ spec:
             annotations:
               nginx.ingress.kubernetes.io/rewrite-target: /
             hosts:
-              - host: grafana.k8.publicvm.com
-                paths:
-                  - path: /
-                    pathType: Prefix
+              - grafana.k8.publicvm.com
 
           # Grafana configuration
           grafana.ini:
@@ -157,10 +151,7 @@ spec:
             annotations:
               nginx.ingress.kubernetes.io/rewrite-target: /
             hosts:
-              - host: alertmanager.k8.publicvm.com
-                paths:
-                  - path: /
-                    pathType: Prefix
+              - alertmanager.k8.publicvm.com
 
         # Node Exporter configuration
         nodeExporter:
