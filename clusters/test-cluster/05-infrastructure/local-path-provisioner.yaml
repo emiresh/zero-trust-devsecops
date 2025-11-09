@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.rancher.io
+    repoURL: https://rancher.github.io/local-path-provisioner/
     chart: local-path-provisioner
     targetRevision: 0.0.26
     helm:
@@ -30,7 +30,7 @@ spec:
 
         nodePathMap:
         - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
-          paths: ["/opt/local-path-provisioner"]   # ✅ Make sure this path exists on all worker nodes
+          paths: ["/opt/local-path-provisioner"]
 
         resources:
           requests:
