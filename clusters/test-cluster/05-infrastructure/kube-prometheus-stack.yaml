@@ -75,7 +75,7 @@ spec:
           # Persistence
           persistence:
             enabled: true
-            storageClassName: default
+            storageClassName: local-path
             size: 5Gi
             
           # Minimal resource limits and requests
