@@ -8,12 +8,220 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/emiresh/argo.git  # Change to your repository URL
-    targetRevision: HEAD
-    path: apps/kube-prometheus-stack
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 65.1.1
+    chart: kube-prometheus-stack
     helm:
-      valueFiles:
-        - values.yaml
+      values: |
+        # Global configuration
+        global:
+          scrapeInterval: 30s
+          scrapeTimeout: 10s
+          evaluationInterval: 30s
+
+        # Prometheus configuration
+        prometheus:
+          enabled: true
+          prometheusSpec:
+            replicas: 1
+            retention: 15d
+            retentionSize: 10GiB
+            
+            # Storage configuration
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: default
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+
+            # Minimal resource limits and requests
+            resources:
+              requests:
+                memory: 512Mi
+                cpu: 200m
+              limits:
+                memory: 1Gi
+                cpu: 500m
+
+            # Service Monitor configuration
+            serviceMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+
+            # External URL for your domain
+            externalUrl: http://prometheus.k8.publicvm.com
+
+          # Ingress configuration for Prometheus
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/rewrite-target: /
+            hosts:
+              - host: prometheus.k8.publicvm.com
+                paths:
+                  - path: /
+                    pathType: Prefix
+
+        # Grafana configuration
+        grafana:
+          enabled: true
+          
+          # Admin credentials
+          adminUser: admin
+          adminPassword: admin123
+          
+          # Persistence
+          persistence:
+            enabled: true
+            storageClassName: default
+            size: 5Gi
+            
+          # Minimal resource limits and requests
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 100m
+
+          # Service configuration
+          service:
+            type: ClusterIP
+            
+          # Ingress configuration
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/rewrite-target: /
+            hosts:
+              - host: grafana.k8.publicvm.com
+                paths:
+                  - path: /
+                    pathType: Prefix
+
+          # Grafana configuration
+          grafana.ini:
+            server:
+              root_url: http://grafana.k8.publicvm.com
+              serve_from_sub_path: false
+            security:
+              allow_embedding: true
+              cookie_secure: false
+            auth.anonymous:
+              enabled: true
+              org_role: Viewer
+
+        # AlertManager configuration
+        alertmanager:
+          enabled: true
+          alertmanagerSpec:
+            replicas: 1
+            
+            # Storage configuration
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: default
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 2Gi
+
+            # Minimal resource limits and requests
+            resources:
+              requests:
+                memory: 64Mi
+                cpu: 50m
+              limits:
+                memory: 128Mi
+                cpu: 100m
+
+            # External URL for your domain
+            externalUrl: http://alertmanager.k8.publicvm.com
+
+          # Service configuration
+          service:
+            type: ClusterIP
+
+          # Ingress configuration for AlertManager
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              nginx.ingress.kubernetes.io/rewrite-target: /
+            hosts:
+              - host: alertmanager.k8.publicvm.com
+                paths:
+                  - path: /
+                    pathType: Prefix
+
+        # Node Exporter configuration
+        nodeExporter:
+          enabled: true
+          serviceMonitor:
+            enabled: true
+
+        # Kube State Metrics configuration
+        kubeStateMetrics:
+          enabled: true
+
+        # Component monitoring settings
+        coreDns:
+          enabled: true
+
+        kubelet:
+          enabled: true
+          serviceMonitor:
+            https: true
+
+        kubeControllerManager:
+          enabled: true
+
+        kubeScheduler:
+          enabled: true
+
+        kubeProxy:
+          enabled: true
+
+        kubeEtcd:
+          enabled: true
+
+        # Prometheus Operator configuration
+        prometheusOperator:
+          enabled: true
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 100m
+
+        # Default alerting rules
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: true
+            general: true
+            k8s: true
+            kubeApiserverAvailability: true
+            kubelet: true
+            kubernetesApps: true
+            kubernetesResources: true
+            kubernetesStorage: true
+            kubernetesSystem: true
+            node: true
+            prometheus: true
+            prometheusOperator: true
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
