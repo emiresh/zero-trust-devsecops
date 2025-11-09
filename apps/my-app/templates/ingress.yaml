@@ -11,8 +11,17 @@ metadata:
     nginx.ingress.kubernetes.io/rewrite-target: {{ .Values.ingress.rewriteTarget }}
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ .Values.ingress.forceSslRedirect }}"
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
   rules:
   - host: {{ .Values.ingress.host }}
     http:

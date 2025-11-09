@@ -17,9 +17,13 @@ ingress:
   host: k8.publicvm.com
   path: /
   pathType: Prefix
-  sslRedirect: false
-  forceSslRedirect: false
+  sslRedirect: true
+  forceSslRedirect: true
   rewriteTarget: /
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt
+    secretName: my-app-tls
 
 service:
   name: my-app-service

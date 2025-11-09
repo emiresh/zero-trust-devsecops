@@ -34,7 +34,7 @@ spec:
             timeoutSeconds: 10
             admissionReviewVersions: ["v1", "v1beta1"]
             certManager:
-              enabled: false
+              enabled: true
           config:
             use-forwarded-headers: "true"
             proxy-body-size: "100m"

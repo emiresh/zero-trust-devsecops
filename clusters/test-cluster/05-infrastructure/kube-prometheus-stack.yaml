@@ -57,12 +57,7 @@ spec:
 
           # Ingress configuration for Prometheus
           ingress:
-            enabled: true
-            ingressClassName: nginx
-            annotations:
-              nginx.ingress.kubernetes.io/rewrite-target: /
-            hosts:
-              - prometheus.k8.publicvm.com
+            enabled: false
 
         # Grafana configuration
         grafana:
@@ -93,12 +88,7 @@ spec:
             
           # Ingress configuration
           ingress:
-            enabled: true
-            ingressClassName: nginx
-            annotations:
-              nginx.ingress.kubernetes.io/rewrite-target: /
-            hosts:
-              - grafana.k8.publicvm.com
+            enabled: false
 
           # Grafana configuration
           grafana.ini:
@@ -146,12 +136,7 @@ spec:
 
           # Ingress configuration for AlertManager
           ingress:
-            enabled: true
-            ingressClassName: nginx
-            annotations:
-              nginx.ingress.kubernetes.io/rewrite-target: /
-            hosts:
-              - alertmanager.k8.publicvm.com
+            enabled: false
 
         # Node Exporter configuration
         nodeExporter:
