@@ -24,7 +24,7 @@ spec:
           enabled: true
           prometheusSpec:
             replicas: 1
-            retention: 15d
+            retention: 7d
             retentionSize: 10GiB
             
             # Storage configuration
