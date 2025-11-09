@@ -8,14 +8,14 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://rancher.github.io/local-path-provisioner/
+    repoURL: https://charts.containeroo.ch
     chart: local-path-provisioner
-    targetRevision: 0.0.26
+    targetRevision: 0.0.33
     helm:
       values: |
         image:
           repository: rancher/local-path-provisioner
-          tag: v0.0.26
+          tag: v0.0.33
           pullPolicy: IfNotPresent
 
         helperImage:
@@ -43,8 +43,6 @@ spec:
         serviceAccount:
           create: true
           name: local-path-provisioner-service-account
-
-        namespace: local-path-storage
 
   destination:
     server: https://kubernetes.default.svc
