@@ -20,6 +20,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: your-main-service
+            name: my-app-service
             port:
               number: 80
