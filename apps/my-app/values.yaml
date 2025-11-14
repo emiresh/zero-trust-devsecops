@@ -3,20 +3,88 @@ app:
 
 namespace: dev
 
-replicaCount: 2
+secrets:
+  DATABASE_URL: "your-database-url"
+  API_KEY: "your-api-key"
 
-image:
-  repository: nginx
-  tag: latest
-  pullPolicy: IfNotPresent
+deployments:
+  - name: apigateway
+    replicaCount: 2
+    image:
+      repository: emiresh/freshbonds-api-gateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      name: apigateway-service
+      port: 8080
+      targetPort: 8080
+    ingress:
+      enabled: false
+    envFrom:
+      - secretRef:
+          name: my-app-secrets
+
+  - name: frontend
+    replicaCount: 2
+    image:
+      repository: emiresh/freshbonds-frontend
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      name: frontend-service
+      port: 80
+      targetPort: 3000
+    ingress:
+      enabled: true
+      path: /
+      pathType: Prefix
+    env:
+      - name: REACT_APP_API_URL
+        value: "http://apigateway-service:8080"
+      - name: NODE_ENV
+        value: "production"
+
+  - name: product-service
+    replicaCount: 2
+    image:
+      repository: emiresh/freshbonds-product-service
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      name: product-service
+      port: 8081
+      targetPort: 8081
+    ingress:
+      enabled: false
+    envFrom:
+      - secretRef:
+          name: my-app-secrets
+    env:
+      - name: SERVICE_PORT
+        value: "8081"
+
+  - name: user-service
+    replicaCount: 2
+    image:
+      repository: emiresh/freshbonds-user-service
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      name: user-service
+      port: 8082
+      targetPort: 8082
+    ingress:
+      enabled: false
+    envFrom:
+      - secretRef:
+          name: my-app-secrets
+    env:
+      - name: SERVICE_PORT
+        value: "8082"
 
 ingress:
-  enabled: true
-  name: my-app-ingress
   className: nginx
   host: k8.publicvm.com
-  path: /
-  pathType: Prefix
   sslRedirect: false
   forceSslRedirect: true
   rewriteTarget: /
@@ -24,7 +92,3 @@ ingress:
     enabled: true
     clusterIssuer: letsencrypt
     secretName: my-app-tls
-
-service:
-  name: my-app-service
-  port: 80

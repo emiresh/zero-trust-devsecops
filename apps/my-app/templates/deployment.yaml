@@ -1,29 +1,42 @@
+{{- range .Values.deployments }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "{{ .Chart.Name }}"
-  namespace: "{{ .Release.Namespace }}"
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
   labels:
-    app: "{{ .Chart.Name }}"
+    app: {{ .name }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .replicaCount }}
   selector:
     matchLabels:
-      app: "{{ .Chart.Name }}"
+      app: {{ .name }}
   template:
     metadata:
       labels:
-        app: "{{ .Chart.Name }}"
+        app: {{ .name }}
     spec:
       containers:
-      - name: "{{ .Chart.Name }}"
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      - name: {{ .name }}
+        image: "{{ .image.repository }}:{{ .image.tag }}"
+        imagePullPolicy: {{ .image.pullPolicy }}
         ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 100m
-            memory: 128Mi
-          requests:
-            cpu: 50m
-            memory: 64Mi
+        - name: http
+          containerPort: {{ .service.targetPort }}
+          protocol: TCP
+        {{- if .envFrom }}
+        envFrom:
+        {{- range .envFrom }}
+        - secretRef:
+            name: {{ .secretRef.name }}
+        {{- end }}
+        {{- end }}
+        {{- if .env }}
+        env:
+        {{- range .env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        {{- end }}
+{{- end }}
