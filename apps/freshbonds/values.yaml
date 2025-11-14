@@ -1,5 +1,5 @@
 app:
-  name: my-app
+  name: freshbonds
 
 namespace: dev
 
@@ -91,4 +91,4 @@ ingress:
   tls:
     enabled: true
     clusterIssuer: letsencrypt
-    secretName: my-app-tls
+    secretName: freshbonds-tls

@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: my-app-dev
+  name: freshbonds-dev
   namespace: argocd
 spec:
-  project: dev-project
+  project: default
   source:
-    repoURL: 'https://github.com/emiresh/argo.git'
+    repoURL: https://github.com/emiresh/argo.git
     targetRevision: main
-    path: apps/my-app
+    path: apps/freshbonds
     helm:
       valueFiles:
         - values.yaml
   destination:
-    server: 'https://kubernetes.default.svc'
+    server: https://kubernetes.default.svc
     namespace: dev
   syncPolicy:
     automated:
@@ -21,4 +21,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - Replace=true
