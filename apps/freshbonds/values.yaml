@@ -15,7 +15,7 @@ deployments:
     replicaCount: 2
     image:
       repository: emiresh/freshbonds-api-gateway
-      tag: latest
+      tag: v1.2.1
       pullPolicy: IfNotPresent
     service:
       name: apigateway-service
@@ -23,6 +23,19 @@ deployments:
       targetPort: 8080
     ingress:
       enabled: false
+    healthCheck:
+      liveness:
+        path: /health/live
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 3
+        failureThreshold: 3
+      readiness:
+        path: /health/ready
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
     envFrom:
       - secretRef:
           name: freshbonds-secrets
@@ -38,7 +51,7 @@ deployments:
     replicaCount: 2
     image:
       repository: emiresh/freshbonds-frontend
-      tag: v1.2.0
+      tag: v1.2.1
       pullPolicy: IfNotPresent
     service:
       name: frontend-service
@@ -62,7 +75,7 @@ deployments:
     replicaCount: 2
     image:
       repository: emiresh/freshbonds-product-service
-      tag: latest
+      tag: v1.2.1
       pullPolicy: IfNotPresent
     service:
       name: product-service
@@ -70,6 +83,19 @@ deployments:
       targetPort: 3002
     ingress:
       enabled: false
+    healthCheck:
+      liveness:
+        path: /health/live
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 3
+        failureThreshold: 3
+      readiness:
+        path: /health/ready
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
     envFrom:
       - secretRef:
           name: freshbonds-secrets
@@ -81,7 +107,7 @@ deployments:
     replicaCount: 2
     image:
       repository: emiresh/freshbonds-user-service
-      tag: latest
+      tag: v1.2.1
       pullPolicy: IfNotPresent
     service:
       name: user-service
@@ -89,6 +115,19 @@ deployments:
       targetPort: 3001
     ingress:
       enabled: false
+    healthCheck:
+      liveness:
+        path: /health/live
+        initialDelaySeconds: 10
+        periodSeconds: 30
+        timeoutSeconds: 3
+        failureThreshold: 3
+      readiness:
+        path: /health/ready
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 3
+        failureThreshold: 3
     envFrom:
       - secretRef:
           name: freshbonds-secrets

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # API Gateway
   api-gateway:
-    build: ./services/api-gateway
+    build: ./src/api-gateway
     container_name: fresh-bonds-gateway
     ports:
       - "8080:8080"
@@ -26,7 +26,7 @@ services:
 
   # User Service
   user-service:
-    build: ./services/user-service
+    build: ./src/user-service
     container_name: fresh-bonds-user-service
     ports:
       - "3001:3001"
@@ -42,7 +42,7 @@ services:
 
   # Product Service
   product-service:
-    build: ./services/product-service
+    build: ./src/product-service
     container_name: fresh-bonds-product-service
     ports:
       - "3002:3002"
@@ -59,7 +59,7 @@ services:
   # Frontend Service
   frontend:
     build: 
-      context: ./services/frontend
+      context: ./src/frontend
       args:
         VITE_API_URL: /api
     container_name: fresh-bonds-frontend

@@ -25,6 +25,24 @@ spec:
         - name: http
           containerPort: {{ .service.targetPort }}
           protocol: TCP
+        {{- if .healthCheck }}
+        livenessProbe:
+          httpGet:
+            path: {{ .healthCheck.liveness.path | default "/health/live" }}
+            port: {{ .service.targetPort }}
+          initialDelaySeconds: {{ .healthCheck.liveness.initialDelaySeconds | default 10 }}
+          periodSeconds: {{ .healthCheck.liveness.periodSeconds | default 30 }}
+          timeoutSeconds: {{ .healthCheck.liveness.timeoutSeconds | default 3 }}
+          failureThreshold: {{ .healthCheck.liveness.failureThreshold | default 3 }}
+        readinessProbe:
+          httpGet:
+            path: {{ .healthCheck.readiness.path | default "/health/ready" }}
+            port: {{ .service.targetPort }}
+          initialDelaySeconds: {{ .healthCheck.readiness.initialDelaySeconds | default 5 }}
+          periodSeconds: {{ .healthCheck.readiness.periodSeconds | default 10 }}
+          timeoutSeconds: {{ .healthCheck.readiness.timeoutSeconds | default 3 }}
+          failureThreshold: {{ .healthCheck.readiness.failureThreshold | default 3 }}
+        {{- end }}
         {{- if .envFrom }}
         envFrom:
         {{- range .envFrom }}

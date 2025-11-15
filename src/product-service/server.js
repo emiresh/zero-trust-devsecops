@@ -11,11 +11,14 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // MongoDB connection with security options
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://admin:admin@dev.qzhiudx.mongodb.net/fresh_bonds?retryWrites=true&w=majority&appName=Dev';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is required');
+  process.exit(1);
+}
 
 mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
   maxPoolSize: 10,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
@@ -87,6 +90,37 @@ app.use((req, res, next) => {
     userAgent: req.get('User-Agent')?.substring(0, 100)
   });
   next();
+});
+
+// Health check endpoints
+app.get('/health/live', (req, res) => {
+  res.status(200).json({ 
+    status: 'UP', 
+    service: 'product-service',
+    timestamp: Date.now()
+  });
+});
+
+app.get('/health/ready', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      res.status(200).json({ 
+        status: 'UP', 
+        database: 'connected',
+        uptime: process.uptime()
+      });
+    } else {
+      res.status(503).json({ 
+        status: 'DOWN', 
+        database: 'disconnected' 
+      });
+    }
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'DOWN', 
+      error: error.message 
+    });
+  }
 });
 
 // Create sample products
@@ -625,4 +659,38 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Product Service running on port ${PORT}`);
   console.log(`🔗 MongoDB URI: ${MONGODB_URI ? 'Connected' : 'Not configured'}`);
   console.log(`🛡️ Security: Enhanced mode enabled`);
+});
+
+// Graceful shutdown handlers
+const gracefulShutdown = async (signal) => {
+  console.log(`\n⚠️ ${signal} received, shutting down gracefully...`);
+  
+  try {
+    // Close MongoDB connection
+    await mongoose.connection.close();
+    console.log('📊 MongoDB connection closed');
+    
+    // Exit process
+    console.log('✅ Product service shut down successfully');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // In production, you might want to gracefully shutdown here
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
 });

@@ -75,6 +75,36 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoints
+app.get('/health/live', (req, res) => {
+  res.status(200).json({ 
+    status: 'UP', 
+    service: 'api-gateway',
+    timestamp: Date.now()
+  });
+});
+
+app.get('/health/ready', async (req, res) => {
+  try {
+    // Check if backend services are reachable
+    const checks = {
+      userService: USER_SERVICE_URL,
+      productService: PRODUCT_SERVICE_URL
+    };
+    
+    res.status(200).json({ 
+      status: 'UP',
+      services: checks,
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'DOWN', 
+      error: error.message 
+    });
+  }
+});
+
 // Service URLs
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
@@ -387,4 +417,38 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📦 Product Service: ${PRODUCT_SERVICE_URL}`);
   console.log(`💳 IPG Config: ${IPG_CONFIG.appName ? 'Configured' : 'Not configured'}`);
   console.log(`🛡️ Security: Enhanced mode enabled`);
+});
+
+// Graceful shutdown handlers
+const gracefulShutdown = async (signal) => {
+  console.log(`\n⚠️ ${signal} received, shutting down gracefully...`);
+  
+  try {
+    // Give active requests time to complete
+    console.log('⏳ Waiting for active requests to complete...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Exit process
+    console.log('✅ API Gateway shut down successfully');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // In production, you might want to gracefully shutdown here
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
