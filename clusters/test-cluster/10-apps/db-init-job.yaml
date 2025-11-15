@@ -82,8 +82,11 @@ spec:
         image: emiresh/freshbonds-user-service:v1.2.1
         workingDir: /app
         command:
-          - node
-          - /scripts/init-db.js
+          - sh
+          - -c
+          - |
+            export NODE_PATH=/app/node_modules
+            node /scripts/init-db.js
         envFrom:
           - secretRef:
               name: freshbonds-secrets
