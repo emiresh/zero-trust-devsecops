@@ -1,0 +1,197 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: monitoring
+spec:
+  project: default
+  source:
+    repoURL: https://falcosecurity.github.io/charts
+    targetRevision: 4.9.0
+    chart: falco
+    helm:
+      values: |
+        # Falco configuration
+        driver:
+          enabled: true
+          kind: modern_ebpf  # Use eBPF driver (no kernel module needed)
+        
+        # Enable gRPC output for falcosidekick
+        grpc:
+          enabled: true
+          bind_address: "0.0.0.0:5060"
+        
+        # Enable HTTP output
+        http_output:
+          enabled: true
+          url: "http://falcosidekick:2801"
+        
+        # Resource limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 200m
+            memory: 1024Mi
+        
+        # Falco rules configuration
+        falco:
+          rules_file:
+            - /etc/falco/falco_rules.yaml
+            - /etc/falco/falco_rules.local.yaml
+            - /etc/falco/k8s_audit_rules.yaml
+            - /etc/falco/rules.d
+          
+          # Priority level for rules (debug, informational, notice, warning, error, critical, alert, emergency)
+          priority: notice
+          
+          # Output configuration
+          json_output: true
+          json_include_output_property: true
+          
+          # Buffer size
+          syscall_event_drops:
+            actions:
+              - log
+              - alert
+            rate: 0.03333
+            max_burst: 1
+        
+        # Custom rules
+        customRules:
+          custom-rules.yaml: |-
+            # Custom security rules for your cluster
+            
+            # Detect shell spawned in container
+            - rule: Shell Spawned in Container
+              desc: A shell was spawned in a container
+              condition: >
+                spawned_process and
+                container and
+                shell_procs and
+                proc.tty != 0 and
+                container_entrypoint
+              output: >
+                Shell spawned in container (user=%user.name %container.info
+                shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline terminal=%proc.tty
+                %container.info)
+              priority: WARNING
+              tags: [container, shell, mitre_execution]
+            
+            # Detect sensitive file read
+            - rule: Read Sensitive File
+              desc: Detect reads of sensitive files
+              condition: >
+                open_read and
+                fd.name in (sensitive_files) and
+                not proc.name in (user_known_read_sensitive_files_activities)
+              output: >
+                Sensitive file opened for reading (user=%user.name
+                file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline
+                gparent=%proc.aname[2] container_id=%container.id image=%container.image.repository)
+              priority: WARNING
+              tags: [filesystem, mitre_discovery, mitre_credential_access]
+            
+            # Detect package management in container
+            - rule: Package Management Executed in Container
+              desc: Package management tools executed in container
+              condition: >
+                spawned_process and
+                container and
+                user.name != "_apt" and
+                package_mgmt_procs and
+                not package_mgmt_ancestor_procs and
+                not user_known_package_manager_in_container
+              output: >
+                Package management process launched in container (user=%user.name
+                command=%proc.cmdline container_id=%container.id container_name=%container.name
+                image=%container.image.repository:%container.image.tag)
+              priority: ERROR
+              tags: [container, process, mitre_persistence]
+            
+            # Detect crypto mining
+            - rule: Detect Crypto Mining
+              desc: Detect cryptocurrency miners
+              condition: >
+                spawned_process and
+                (proc.name in (crypto_miners) or
+                 (proc.cmdline contains "stratum+tcp" or
+                  proc.cmdline contains "xmr-stak" or
+                  proc.cmdline contains "xmrig"))
+              output: >
+                Crypto mining activity detected (user=%user.name
+                command=%proc.cmdline container=%container.info)
+              priority: CRITICAL
+              tags: [process, mitre_impact]
+        
+        # Service account
+        serviceAccount:
+          create: true
+          name: falco
+        
+        # Enable RBAC
+        rbac:
+          create: true
+        
+        # Tolerations to run on all nodes
+        tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+        
+        # Enable falcosidekick for alert routing
+        falcosidekick:
+          enabled: true
+          replicaCount: 1
+          
+          # Falcosidekick configuration
+          config:
+            # AlertManager integration
+            alertmanager:
+              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093"
+              minimumpriority: "warning"
+              checkcert: false
+            
+            # Slack integration (optional - direct from Falco)
+            slack:
+              webhookurl: ""  # Leave empty to use only AlertManager
+              minimumpriority: "critical"
+            
+            # Additional outputs
+            webhook:
+              address: ""
+            
+            # Custom fields to add to alerts
+            customfields: "environment:production,cluster:test-cluster"
+          
+          # Resources
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          
+          # Web UI configuration
+          webui:
+            enabled: true
+          
+          # Service
+          service:
+            type: ClusterIP
+            port: 2801
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
