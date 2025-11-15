@@ -37,6 +37,13 @@ deployments:
     envFrom:
       - secretRef:
           name: freshbonds-secrets
+    env:
+      - name: USER_SERVICE_URL
+        value: "http://user-service:8082"
+      - name: PRODUCT_SERVICE_URL
+        value: "http://product-service:8081"
+      - name: PORT
+        value: "8080"
 
   - name: frontend
     replicaCount: 2
@@ -47,7 +54,7 @@ deployments:
     service:
       name: frontend-service
       port: 80
-      targetPort: 80
+      targetPort: 3000
     ingress:
       enabled: true
       path: /
@@ -71,7 +78,7 @@ deployments:
     service:
       name: product-service
       port: 8081
-      targetPort: 8081
+      targetPort: 3002
     ingress:
       enabled: false
     envFrom:
@@ -79,7 +86,7 @@ deployments:
           name: freshbonds-secrets
     env:
       - name: SERVICE_PORT
-        value: "8081"
+        value: "3002"
 
   - name: user-service
     replicaCount: 2
@@ -90,7 +97,7 @@ deployments:
     service:
       name: user-service
       port: 8082
-      targetPort: 8082
+      targetPort: 3001
     ingress:
       enabled: false
     envFrom:
@@ -98,11 +105,11 @@ deployments:
           name: freshbonds-secrets
     env:
       - name: SERVICE_PORT
-        value: "8082"
+        value: "3001"
 
 ingress:
   className: nginx
-  host: k8.publicvm.com
+  host: freshbonds.com
   sslRedirect: false
   forceSslRedirect: true
   rewriteTarget: /
