@@ -141,18 +141,24 @@ spec:
                 slack_configs:
                   - api_url_file: /etc/alertmanager/secrets/alertmanager-slack-webhook/slack-webhook-url
                     channel: '#alerts'
-                    title: '{{ template "slack.default.title" . }}'
-                    text: '{{ template "slack.default.text" . }}'
+                    # Custom title with emoji for firing vs resolved
+                    title: '{{ if eq .Status "firing" }}🚨 ALERT{{ else }}✅ RESOLVED{{ end }}: {{ .CommonLabels.alertname }}'
+                    text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
                     send_resolved: true
                     color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
                     title_link: '{{ template "slack.default.titlelink" . }}'
-                    pretext: '{{ .CommonAnnotations.summary }}'
                     fields:
-                      - title: 'Severity'
-                        value: '{{ .CommonLabels.severity }}'
-                        short: true
                       - title: 'Status'
-                        value: '{{ .Status }}'
+                        value: '{{ if eq .Status "firing" }}🔴 FIRING{{ else }}🟢 RESOLVED{{ end }}'
+                        short: true
+                      - title: 'Severity'
+                        value: '{{ .CommonLabels.severity | toUpper }}'
+                        short: true
+                      - title: 'Alert'
+                        value: '{{ .CommonLabels.alertname }}'
+                        short: true
+                      - title: 'Namespace'
+                        value: '{{ .CommonLabels.namespace }}'
                         short: true
             
             templates:
