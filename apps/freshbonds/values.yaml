@@ -49,7 +49,7 @@ deployments:
     replicaCount: 2
     image:
       repository: emiresh/freshbonds-frontend
-      tag: v1.1.0
+      tag: v1.2.0
       pullPolicy: IfNotPresent
     service:
       name: frontend-service
