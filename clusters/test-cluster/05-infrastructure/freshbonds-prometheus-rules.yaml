@@ -1,0 +1,182 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: freshbonds-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+  # Microservices Application Alerts
+  - name: freshbonds-app-alerts
+    interval: 30s
+    rules:
+    # Service down alert
+    - alert: ServiceDown
+      expr: up{job=~"freshbonds.*|api-gateway|product-service|user-service"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: freshbonds
+      annotations:
+        summary: "Service {{ $labels.job }} is down"
+        description: "{{ $labels.job }} has been down for more than 2 minutes"
+    
+    # High memory usage - Adjustable threshold
+    - alert: HighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}
+          / 
+          container_spec_memory_limit_bytes{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}
+        ) > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        component: freshbonds
+      annotations:
+        summary: "High memory usage in {{ $labels.pod }}"
+        description: "Memory usage is {{ $value | humanizePercentage }} in namespace {{ $labels.namespace }} (threshold: 85%)"
+    
+    # Critical memory usage
+    - alert: CriticalMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}
+          / 
+          container_spec_memory_limit_bytes{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}
+        ) > 0.95
+      for: 2m
+      labels:
+        severity: critical
+        component: freshbonds
+      annotations:
+        summary: "Critical memory usage in {{ $labels.pod }}"
+        description: "Memory usage is {{ $value | humanizePercentage }} in namespace {{ $labels.namespace }} (threshold: 95%)"
+    
+    # High CPU usage - Adjustable threshold
+    - alert: HighCPUUsage
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}[5m])
+        ) > 0.80
+      for: 5m
+      labels:
+        severity: warning
+        component: freshbonds
+      annotations:
+        summary: "High CPU usage in {{ $labels.pod }}"
+        description: "CPU usage is {{ $value | humanize }} cores in namespace {{ $labels.namespace }} (threshold: 0.8 cores)"
+    
+    # Pod restart alert
+    - alert: PodRestartingFrequently
+      expr: |
+        rate(kube_pod_container_status_restarts_total{namespace="dev", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"}[15m]) * 60 > 2
+      for: 5m
+      labels:
+        severity: warning
+        component: freshbonds
+      annotations:
+        summary: "Pod {{ $labels.pod }} is restarting frequently"
+        description: "Pod has restarted more than 2 times in the last 15 minutes in namespace {{ $labels.namespace }}"
+    
+    # Pod CrashLoopBackOff
+    - alert: PodCrashLooping
+      expr: |
+        kube_pod_container_status_waiting_reason{namespace="dev", reason="CrashLoopBackOff", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"} > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: freshbonds
+      annotations:
+        summary: "Pod {{ $labels.pod }} is in CrashLoopBackOff"
+        description: "Pod {{ $labels.pod }} is crash looping in namespace {{ $labels.namespace }}"
+    
+    # Container OOMKilled
+    - alert: ContainerOOMKilled
+      expr: |
+        kube_pod_container_status_last_terminated_reason{namespace="dev", reason="OOMKilled", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"} > 0
+      for: 1m
+      labels:
+        severity: critical
+        component: freshbonds
+      annotations:
+        summary: "Container in {{ $labels.pod }} was OOMKilled"
+        description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was killed due to out of memory in namespace {{ $labels.namespace }}"
+    
+    # Pod not ready
+    - alert: PodNotReady
+      expr: |
+        kube_pod_status_phase{namespace="dev", phase!~"Running|Succeeded", pod=~"freshbonds.*|api-gateway.*|product-service.*|user-service.*"} > 0
+      for: 10m
+      labels:
+        severity: warning
+        component: freshbonds
+      annotations:
+        summary: "Pod {{ $labels.pod }} is not ready"
+        description: "Pod {{ $labels.pod }} has been in {{ $labels.phase }} state for more than 10 minutes in namespace {{ $labels.namespace }}"
+  
+  # Infrastructure Alerts with Custom Thresholds
+  - name: infrastructure-alerts
+    interval: 30s
+    rules:
+    # Disk space warning - 15% threshold
+    - alert: DiskSpaceWarning
+      expr: |
+        (
+          node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+          / 
+          node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}
+        ) < 0.15
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Low disk space on {{ $labels.instance }}"
+        description: "Only {{ $value | humanizePercentage }} disk space remaining (threshold: 15%)"
+    
+    # Disk space critical - 10% threshold
+    - alert: DiskSpaceCritical
+      expr: |
+        (
+          node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+          / 
+          node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}
+        ) < 0.10
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Critical disk space on {{ $labels.instance }}"
+        description: "Only {{ $value | humanizePercentage }} disk space remaining (threshold: 10%)"
+    
+    # Node memory pressure
+    - alert: NodeMemoryPressure
+      expr: |
+        (
+          node_memory_MemAvailable_bytes 
+          / 
+          node_memory_MemTotal_bytes
+        ) < 0.10
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory pressure on {{ $labels.instance }}"
+        description: "Only {{ $value | humanizePercentage }} memory available (threshold: 10%)"
+    
+    # PVC almost full
+    - alert: PVCAlmostFull
+      expr: |
+        (
+          kubelet_volume_stats_available_bytes{namespace="dev"}
+          /
+          kubelet_volume_stats_capacity_bytes{namespace="dev"}
+        ) < 0.15
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "PVC {{ $labels.persistentvolumeclaim }} is almost full"
+        description: "Only {{ $value | humanizePercentage }} space remaining in namespace {{ $labels.namespace }} (threshold: 15%)"

@@ -105,8 +105,65 @@ spec:
         # AlertManager configuration
         alertmanager:
           enabled: true
+          
+          # AlertManager configuration
+          # Note: Slack webhook URL is stored in a Kubernetes Secret for security
+          # Secret name: alertmanager-slack-webhook (namespace: monitoring)
+          config:
+            global:
+              resolve_timeout: 5m
+              # Slack webhook URL will be injected from secret
+              # To update: kubectl create secret generic alertmanager-slack-webhook \
+              #   --from-literal=slack-api-url="YOUR_WEBHOOK_URL" -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+            
+            route:
+              group_by: ['alertname', 'cluster', 'service']
+              group_wait: 10s
+              group_interval: 10s
+              repeat_interval: 12h
+              receiver: 'slack-notifications'
+              routes:
+                - match:
+                    alertname: Watchdog
+                  receiver: 'null'
+                - match:
+                    severity: critical
+                  receiver: 'slack-notifications'
+                  continue: true
+                - match:
+                    severity: warning
+                  receiver: 'slack-notifications'
+                  continue: true
+            
+            receivers:
+              - name: 'null'
+              - name: 'slack-notifications'
+                slack_configs:
+                  - api_url_file: /etc/alertmanager/secrets/alertmanager-slack-webhook/slack-webhook-url
+                    channel: '#alerts'
+                    title: '{{ template "slack.default.title" . }}'
+                    text: '{{ template "slack.default.text" . }}'
+                    send_resolved: true
+                    color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+                    title_link: '{{ template "slack.default.titlelink" . }}'
+                    pretext: '{{ .CommonAnnotations.summary }}'
+                    fields:
+                      - title: 'Severity'
+                        value: '{{ .CommonLabels.severity }}'
+                        short: true
+                      - title: 'Status'
+                        value: '{{ .Status }}'
+                        short: true
+            
+            templates:
+              - '/etc/alertmanager/config/*.tmpl'
+          
           alertmanagerSpec:
             replicas: 1
+            
+            # Mount the secret containing Slack webhook URL
+            secrets:
+              - alertmanager-slack-webhook
             
             # Storage configuration
             storage:
@@ -185,18 +242,18 @@ spec:
           create: true
           rules:
             alertmanager: true
-            etcd: true
+            etcd: ture
             general: true
             k8s: true
             kubeApiserverAvailability: true
             kubelet: true
-            kubernetesApps: true
-            kubernetesResources: true
-            kubernetesStorage: true
-            kubernetesSystem: true
-            node: true
+            kubernetesApps: true     # Pod crashes, restarts, OOMKills
+            kubernetesResources: true # CPU/Memory overcommit
+            kubernetesStorage: true  # PVC and storage issues
+            kubernetesSystem: true   # System component failures
+            node: true               # Node disk, memory, CPU issues
             prometheus: true
-            prometheusOperator: true
+            prometheusOperator: false # Disable operator alerts
 
   destination:
     server: https://kubernetes.default.svc
