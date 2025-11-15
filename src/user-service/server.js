@@ -138,39 +138,22 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   process.exit(1);
 }
 
-// Create sample users with enhanced security
+// Create sample user with enhanced security
 async function createSampleUsers() {
   try {
     const existingUsers = await User.countDocuments();
     if (existingUsers === 0) {
-      console.log('🌱 Creating sample users...');
+      console.log('🌱 Creating sample user...');
       
       const sampleUsers = [
         {
-          name: 'Sarah Thompson',
-          email: 'sarah@greenvalleys.com',
-          password: 'Farmer123!',
-          role: 'farmer',
-          location: 'Kandy, Sri Lanka',
-          farmName: 'Green Valley Organic Farm',
-          mobile: '0766025562'
-        },
-        {
-          name: 'Michael Chen',
-          email: 'admin@freshbonds.com',
-          password: 'Admin123!',
+          name: 'Iresh Ekanayaka',
+          email: 'ireshek@gmail.com',
+          password: 'Iresh@1998',
           role: 'admin',
-          location: 'Colombo, Sri Lanka',
-          mobile: '0112345678'
-        },
-        {
-          name: 'John Doe',
-          email: 'john@example.com',
-          password: 'Farmer123!',
-          role: 'farmer',
-          location: 'Matara, Sri Lanka',
-          farmName: 'Sunrise Farm',
-          mobile: '0774567890'
+          location: 'Kurunegala, Sri Lanka',
+          farmName: 'Athugalpura',
+          mobile: '0766025562'
         }
       ];
 

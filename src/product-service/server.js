@@ -130,98 +130,16 @@ async function createSampleProducts() {
     if (existingProducts === 0) {
       console.log('🌱 Creating sample products...');
       
-      const sampleProducts = [
-        {
-          name: 'Organic Heirloom Tomatoes',
-          description: 'Fresh, juicy heirloom tomatoes grown using organic methods. Perfect for salads, sandwiches, or cooking.',
-          price: 699.00, // LKR
-          category: 'Vegetables',
-          image: 'https://images.pexels.com/photos/1327838/pexels-photo-1327838.jpeg?auto=compress&cs=tinysrgb&w=800',
-          farmerId: '1',
-          farmerName: 'Sarah Thompson',
-          farmerLocation: 'Kandy, Sri Lanka',
-          farmerMobile: '0766025562',
-          inStock: true,
-          isVisible: true,
-          harvestDate: new Date('2025-01-15'),
-          organic: true,
-          quantity: '2',
-          unit: 'kg'
-        },
-        {
-          name: 'Fresh Organic Eggs',
-          description: 'Farm-fresh eggs from free-range chickens. Rich, golden yolks and superior taste.',
-          price: 850.00, // LKR
-          category: 'Dairy & Eggs',
-          image: 'https://images.pexels.com/photos/162712/egg-white-food-protein-162712.jpeg?auto=compress&cs=tinysrgb&w=800',
-          farmerId: '1',
-          farmerName: 'Sarah Thompson',
-          farmerLocation: 'Kandy, Sri Lanka',
-          farmerMobile: '0766025562',
-          inStock: true,
-          isVisible: true,
-          harvestDate: new Date('2025-01-16'),
-          organic: true,
-          quantity: '12',
-          unit: 'count'
-        },
-        {
-          name: 'Crisp Lettuce Mix',
-          description: 'A delightful mix of fresh lettuce varieties. Perfect for salads and sandwiches.',
-          price: 425.00, // LKR
-          category: 'Vegetables',
-          image: 'https://images.pexels.com/photos/1352199/pexels-photo-1352199.jpeg?auto=compress&cs=tinysrgb&w=800',
-          farmerId: '1',
-          farmerName: 'Sarah Thompson',
-          farmerLocation: 'Kandy, Sri Lanka',
-          farmerMobile: '0766025562',
-          inStock: true,
-          isVisible: true,
-          harvestDate: new Date('2025-01-14'),
-          organic: true,
-          quantity: '1',
-          unit: 'head'
-        },
-        {
-          name: 'Sweet Strawberries',
-          description: 'Juicy, sweet strawberries picked at peak ripeness. Perfect for eating fresh or desserts.',
-          price: 799.00, // LKR
-          category: 'Fruits',
-          image: 'https://images.pexels.com/photos/46174/strawberries-berries-fruit-freshness-46174.jpeg?auto=compress&cs=tinysrgb&w=800',
-          farmerId: '1',
-          farmerName: 'Sarah Thompson',
-          farmerLocation: 'Kandy, Sri Lanka',
-          farmerMobile: '0766025562',
-          inStock: true,
-          isVisible: true,
-          harvestDate: new Date('2025-01-15'),
-          organic: true,
-          quantity: '500',
-          unit: 'g'
-        },
-        {
-          name: 'Artisan Honey',
-          description: 'Pure, raw honey harvested from our own beehives. Complex floral flavor, unfiltered and unpasteurized.',
-          price: 1299.00, // LKR
-          category: 'Pantry',
-          image: 'https://images.pexels.com/photos/316908/pexels-photo-316908.jpeg?auto=compress&cs=tinysrgb&w=800',
-          farmerId: '1',
-          farmerName: 'Sarah Thompson',
-          farmerLocation: 'Kandy, Sri Lanka',
-          farmerMobile: '0766025562',
-          inStock: true,
-          isVisible: true,
-          harvestDate: new Date('2025-01-05'),
-          organic: true,
-          quantity: '350',
-          unit: 'g'
-        }
-      ];
+      const sampleProducts = [];
 
       for (const productData of sampleProducts) {
         const product = new Product(productData);
         await product.save();
         console.log(`✅ Created product: ${product.name}`);
+      }
+      
+      if (sampleProducts.length === 0) {
+        console.log('ℹ️ No sample products to create');
       }
     }
   } catch (error) {
