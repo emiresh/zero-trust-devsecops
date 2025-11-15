@@ -53,6 +53,10 @@ deployments:
       path: /
       pathType: Prefix
     env:
+      - name: API_GATEWAY_HOST
+        value: "apigateway-service"
+      - name: API_GATEWAY_PORT
+        value: "8080"
       - name: REACT_APP_API_URL
         value: "http://apigateway-service:8080"
       - name: NODE_ENV
