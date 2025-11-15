@@ -85,8 +85,9 @@ spec:
           - sh
           - -c
           - |
-            cp /scripts/init-db.js /app/init-db.js
-            node /app/init-db.js
+            cp /scripts/init-db.js /tmp/init-db.js
+            cd /app
+            node /tmp/init-db.js
         envFrom:
           - secretRef:
               name: freshbonds-secrets
