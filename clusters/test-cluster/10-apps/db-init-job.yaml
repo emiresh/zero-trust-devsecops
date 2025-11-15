@@ -6,31 +6,7 @@ metadata:
 data:
   init-db.js: |
     const mongoose = require('mongoose');
-    const bcrypt = require('bcryptjs');
-    
-    const userSchema = new mongoose.Schema({
-      name: { type: String, required: true },
-      email: { type: String, required: true, unique: true, lowercase: true },
-      password: { type: String, required: true },
-      role: { type: String, enum: ['farmer', 'buyer', 'admin'], default: 'farmer' },
-      location: String,
-      farmName: String,
-      mobile: String,
-      createdAt: { type: Date, default: Date.now }
-    });
-    
-    userSchema.pre('save', async function(next) {
-      if (!this.isModified('password')) return next();
-      try {
-        const salt = await bcrypt.genSalt(12);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-      } catch (error) {
-        next(error);
-      }
-    });
-    
-    const User = mongoose.model('User', userSchema);
+    const User = require('./models/User');
     
     async function initializeDatabase() {
       const MONGODB_URI = process.env.MONGODB_URI;
@@ -93,9 +69,7 @@ metadata:
   name: freshbonds-db-init
   namespace: dev
 spec:
-  # Don't retry if it fails - allows manual investigation
   backoffLimit: 3
-  # Clean up after 24 hours
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
@@ -106,9 +80,13 @@ spec:
       containers:
       - name: db-init
         image: emiresh/freshbonds-user-service:v1.2.1
+        workingDir: /app
         command:
-          - node
-          - /scripts/init-db.js
+          - sh
+          - -c
+          - |
+            cp /scripts/init-db.js /app/init-db.js
+            node /app/init-db.js
         envFrom:
           - secretRef:
               name: freshbonds-secrets
