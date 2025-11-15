@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: fresh-bonds-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - USER_SERVICE_URL=http://user-service:3001
+      - PRODUCT_SERVICE_URL=http://product-service:3002
+      - NODE_ENV=production
+      # IPG Payment Gateway Configuration
+      - IPG_APP_NAME=${IPG_APP_NAME}
+      - IPG_APP_ID=${IPG_APP_ID}
+      - IPG_APP_TOKEN=${IPG_APP_TOKEN}
+      - IPG_HASH_SALT=${IPG_HASH_SALT}
+      - IPG_CALLBACK_URL=${IPG_CALLBACK_URL}
+      - IPG_CALLBACK_TOKEN=${IPG_CALLBACK_TOKEN}
+    depends_on:
+      - user-service
+      - product-service
+    networks:
+      - fresh-bonds-network
+
+  # User Service
+  user-service:
+    build: ./services/user-service
+    container_name: fresh-bonds-user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    networks:
+      - fresh-bonds-network
+
+  # Product Service
+  product-service:
+    build: ./services/product-service
+    container_name: fresh-bonds-product-service
+    ports:
+      - "3002:3002"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    networks:
+      - fresh-bonds-network
+
+  # Frontend Service
+  frontend:
+    build: 
+      context: ./services/frontend
+      args:
+        VITE_API_URL: /api
+    container_name: fresh-bonds-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - fresh-bonds-network
+
+networks:
+  fresh-bonds-network:
+    driver: bridge
