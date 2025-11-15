@@ -41,25 +41,26 @@ spec:
                 console.log('✅ Connected to MongoDB');
                 
                 console.log('👤 Creating admin user...');
-                const existingUser = await User.findOne({ email: 'ireshek@gmail.com' });
+                const adminEmail = process.env.ADMIN_EMAIL;
+                const existingUser = await User.findOne({ email: adminEmail });
                 
                 if (existingUser) {
                   console.log('⚠️  Admin user already exists - skipping');
                 } else {
                   const adminUser = new User({
-                    name: 'Iresh Ekanayaka',
-                    email: 'ireshek@gmail.com',
-                    password: 'Iresh@1998',
-                    role: 'admin',
-                    location: 'Kurunegala, Sri Lanka',
-                    farmName: 'Athugalpura',
-                    mobile: '0766025562'
+                    name: process.env.ADMIN_NAME,
+                    email: adminEmail,
+                    password: process.env.ADMIN_PASSWORD,
+                    role: process.env.ADMIN_ROLE,
+                    location: process.env.ADMIN_LOCATION,
+                    farmName: process.env.ADMIN_FARMNAME,
+                    mobile: process.env.ADMIN_MOBILE
                   });
                   
                   await adminUser.save();
                   console.log('✅ Admin user created successfully');
-                  console.log('   Email: ireshek@gmail.com');
-                  console.log('   Role: admin');
+                  console.log('   Email: ' + adminEmail);
+                  console.log('   Role: ' + process.env.ADMIN_ROLE);
                 }
                 
                 const userCount = await User.countDocuments();
@@ -80,4 +81,6 @@ spec:
         envFrom:
           - secretRef:
               name: freshbonds-secrets
+          - secretRef:
+              name: admin-user-init
 
