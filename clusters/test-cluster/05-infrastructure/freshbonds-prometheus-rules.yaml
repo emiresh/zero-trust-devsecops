@@ -116,6 +116,18 @@ spec:
       annotations:
         summary: "Pod {{ $labels.pod }} is not ready"
         description: "Pod {{ $labels.pod }} has been in {{ $labels.phase }} state for more than 10 minutes in namespace {{ $labels.namespace }}"
+    
+    # Test alert - catches ANY pod crash in dev namespace (for testing)
+    - alert: TestPodCrashing
+      expr: |
+        kube_pod_container_status_waiting_reason{namespace="dev", reason="CrashLoopBackOff"} > 0
+      for: 5s
+      labels:
+        severity: warning
+        component: test
+      annotations:
+        summary: "TEST: Pod {{ $labels.pod }} is crashing"
+        description: "Pod {{ $labels.pod }} is in CrashLoopBackOff state in namespace {{ $labels.namespace }}"
   
   # Infrastructure Alerts with Custom Thresholds
   - name: infrastructure-alerts
