@@ -242,7 +242,7 @@ spec:
           create: true
           rules:
             alertmanager: true
-            etcd: ture
+            etcd: true               # Fixed typo: was "ture"
             general: true
             k8s: true
             kubeApiserverAvailability: true
