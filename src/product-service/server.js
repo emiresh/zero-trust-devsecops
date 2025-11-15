@@ -25,7 +25,6 @@ mongoose.connect(MONGODB_URI, {
 })
   .then(() => {
     console.log('✅ Connected to MongoDB Atlas');
-    createSampleProducts();
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err);
@@ -122,30 +121,6 @@ app.get('/health/ready', async (req, res) => {
     });
   }
 });
-
-// Create sample products
-async function createSampleProducts() {
-  try {
-    const existingProducts = await Product.countDocuments();
-    if (existingProducts === 0) {
-      console.log('🌱 Creating sample products...');
-      
-      const sampleProducts = [];
-
-      for (const productData of sampleProducts) {
-        const product = new Product(productData);
-        await product.save();
-        console.log(`✅ Created product: ${product.name}`);
-      }
-      
-      if (sampleProducts.length === 0) {
-        console.log('ℹ️ No sample products to create');
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error creating sample products:', error);
-  }
-}
 
 // Health check
 app.get('/health', (req, res) => {

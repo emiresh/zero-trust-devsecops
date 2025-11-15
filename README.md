@@ -64,6 +64,20 @@ kubectl get pods -n dev -w
 kubectl logs -n dev -l app=api-gateway
 ```
 
+### Database Initialization (First Time Setup)
+
+After deploying for the first time, the database initialization job runs automatically:
+
+```bash
+# Watch the job progress
+kubectl logs -n dev -f job/freshbonds-db-init
+
+# Verify completion
+kubectl get jobs -n dev
+```
+
+The job creates the admin user and is idempotent (safe to run multiple times).
+
 ## Build Arguments vs Environment Variables
 
 ### Frontend (Build-time)

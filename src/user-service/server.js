@@ -28,7 +28,6 @@ mongoose.connect(MONGODB_URI, {
 })
   .then(() => {
     console.log('✅ Connected to MongoDB Atlas');
-    createSampleUsers();
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err);
@@ -136,46 +135,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
   console.error('❌ JWT_SECRET must be at least 32 characters long');
   process.exit(1);
-}
-
-// Create sample user with enhanced security
-async function createSampleUsers() {
-  try {
-    const existingUsers = await User.countDocuments();
-    if (existingUsers === 0) {
-      console.log('🌱 Creating sample user...');
-      
-      const sampleUsers = [
-        {
-          name: 'Iresh Ekanayaka',
-          email: 'ireshek@gmail.com',
-          password: 'Iresh@1998',
-          role: 'admin',
-          location: 'Kurunegala, Sri Lanka',
-          farmName: 'Athugalpura',
-          mobile: '0766025562'
-        }
-      ];
-
-      for (const userData of sampleUsers) {
-        try {
-          const user = new User(userData);
-          await user.save();
-          console.log(`✅ Created user: ${user.name} (${user.email})`);
-        } catch (error) {
-          if (error.code === 11000) {
-            console.log(`⚠️ User already exists: ${userData.email}`);
-          } else {
-            console.error(`❌ Error creating user ${userData.email}:`, error.message);
-          }
-        }
-      }
-    } else {
-      console.log(`ℹ️ Found ${existingUsers} existing users, skipping sample data creation`);
-    }
-  } catch (error) {
-    console.error('❌ Error creating sample users:', error);
-  }
 }
 
 // Health check

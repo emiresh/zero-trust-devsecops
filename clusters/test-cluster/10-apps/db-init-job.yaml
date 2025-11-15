@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-script
+  namespace: dev
+data:
+  init-db.js: |
+    const mongoose = require('mongoose');
+    const bcrypt = require('bcryptjs');
+    
+    const userSchema = new mongoose.Schema({
+      name: { type: String, required: true },
+      email: { type: String, required: true, unique: true, lowercase: true },
+      password: { type: String, required: true },
+      role: { type: String, enum: ['farmer', 'buyer', 'admin'], default: 'farmer' },
+      location: String,
+      farmName: String,
+      mobile: String,
+      createdAt: { type: Date, default: Date.now }
+    });
+    
+    userSchema.pre('save', async function(next) {
+      if (!this.isModified('password')) return next();
+      try {
+        const salt = await bcrypt.genSalt(12);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+      } catch (error) {
+        next(error);
+      }
+    });
+    
+    const User = mongoose.model('User', userSchema);
+    
+    async function initializeDatabase() {
+      const MONGODB_URI = process.env.MONGODB_URI;
+      
+      if (!MONGODB_URI) {
+        console.error('❌ MONGODB_URI environment variable is required');
+        process.exit(1);
+      }
+      
+      try {
+        console.log('🔗 Connecting to MongoDB...');
+        await mongoose.connect(MONGODB_URI, {
+          maxPoolSize: 10,
+          serverSelectionTimeoutMS: 5000,
+          socketTimeoutMS: 45000,
+        });
+        console.log('✅ Connected to MongoDB');
+        
+        console.log('👤 Creating admin user...');
+        const existingUser = await User.findOne({ email: 'ireshek@gmail.com' });
+        
+        if (existingUser) {
+          console.log('⚠️  Admin user already exists - skipping');
+        } else {
+          const adminUser = new User({
+            name: 'Iresh Ekanayaka',
+            email: 'ireshek@gmail.com',
+            password: 'Iresh@1998',
+            role: 'admin',
+            location: 'Kurunegala, Sri Lanka',
+            farmName: 'Athugalpura',
+            mobile: '0766025562'
+          });
+          
+          await adminUser.save();
+          console.log('✅ Admin user created successfully');
+          console.log('   Email: ireshek@gmail.com');
+          console.log('   Role: admin');
+        }
+        
+        const userCount = await User.countDocuments();
+        console.log(`\n📋 Total users in database: ${userCount}`);
+        console.log('🎉 Database initialization complete!');
+        
+      } catch (error) {
+        console.error('❌ Initialization error:', error);
+        process.exit(1);
+      } finally {
+        await mongoose.connection.close();
+        console.log('✅ Database connection closed');
+        process.exit(0);
+      }
+    }
+    
+    initializeDatabase();
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: freshbonds-db-init
+  namespace: dev
+spec:
+  # Don't retry if it fails - allows manual investigation
+  backoffLimit: 3
+  # Clean up after 24 hours
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: db-init
+        image: emiresh/freshbonds-user-service:v1.2.1
+        command:
+          - node
+          - /scripts/init-db.js
+        envFrom:
+          - secretRef:
+              name: freshbonds-secrets
+        volumeMounts:
+          - name: init-script
+            mountPath: /scripts
+      volumes:
+        - name: init-script
+          configMap:
+            name: db-init-script
