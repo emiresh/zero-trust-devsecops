@@ -4,8 +4,22 @@ app:
 namespace: dev
 
 secrets:
-  DATABASE_URL: "your-database-url"
-  API_KEY: "your-api-key"
+  # MongoDB connection string for product-service
+  MONGODB_URI: "mongodb+srv://admin:Iresh1998@dev.qzhiudx.mongodb.net/?appName=Dev"
+  
+  # JWT Secret for user-service (must be at least 32 characters)
+  JWT_SECRET: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9aGVsbG93b3JsZDEyMzQ1Njc4OTA"
+  
+  # IPG Payment Gateway Configuration
+  IPG_APP_NAME: "FreshBonds"
+  IPG_APP_ID: "WO1411908F4204BD4A83D"
+  IPG_APP_TOKEN: "c19aa03307d168525ceb1cd0be6a5d785f1a92962ce67e22c7b46b533e002a6c5281a2e2f96de3c8.443G11908F4204BD4A871"
+  IPG_HASH_SALT: "6OQC11908F4204BD4A85D"
+  IPG_CALLBACK_URL: "https://freshbonds.com/api/payment-callback"
+  IPG_CALLBACK_TOKEN: "fbonds_cbk_T0k3n_2025!@#"
+  
+  # Environment
+  NODE_ENV: "production"
 
 deployments:
   - name: apigateway
@@ -22,7 +36,7 @@ deployments:
       enabled: false
     envFrom:
       - secretRef:
-          name: my-app-secrets
+          name: freshbonds-secrets
 
   - name: frontend
     replicaCount: 2
@@ -33,7 +47,7 @@ deployments:
     service:
       name: frontend-service
       port: 80
-      targetPort: 3000
+      targetPort: 80
     ingress:
       enabled: true
       path: /
@@ -58,7 +72,7 @@ deployments:
       enabled: false
     envFrom:
       - secretRef:
-          name: my-app-secrets
+          name: freshbonds-secrets
     env:
       - name: SERVICE_PORT
         value: "8081"
@@ -77,7 +91,7 @@ deployments:
       enabled: false
     envFrom:
       - secretRef:
-          name: my-app-secrets
+          name: freshbonds-secrets
     env:
       - name: SERVICE_PORT
         value: "8082"
