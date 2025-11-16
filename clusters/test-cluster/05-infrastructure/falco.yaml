@@ -16,9 +16,7 @@ spec:
         # Falco configuration
         driver:
           enabled: true
-          kind: ebpf  # Use standard eBPF driver (more compatible)
-          ebpf:
-            leastPrivileged: false  # Use privileged mode for compatibility
+          kind: kmod  # Use kernel module (most compatible)
         
         # Enable gRPC output for falcosidekick
         grpc:
