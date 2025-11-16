@@ -43,7 +43,7 @@ spec:
         
         # Falco rules configuration
         falco:
-          rules_file:
+          rules_files:
             - /etc/falco/falco_rules.yaml
             - /etc/falco/falco_rules.local.yaml
             - /etc/falco/k8s_audit_rules.yaml
