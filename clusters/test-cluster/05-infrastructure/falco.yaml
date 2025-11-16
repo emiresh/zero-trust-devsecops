@@ -134,9 +134,10 @@ spec:
           
           # Falcosidekick configuration
           config:
-            # AlertManager integration
+            # AlertManager integration (using v2 API)
             alertmanager:
-              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093/api/v2/alerts"
+              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093"
+              endpoint: "/api/v2/alerts"
               minimumpriority: "warning"
               checkcert: false
             
