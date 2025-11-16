@@ -1,0 +1,66 @@
+# Example: Secure Deployment Configuration
+# Add this securityContext section to your deployment.yaml template
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-app-example
+  namespace: dev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secure-app
+  template:
+    metadata:
+      labels:
+        app: secure-app
+    spec:
+      # Pod-level security context
+      securityContext:
+        runAsNonRoot: true          # Don't run as root
+        runAsUser: 1000             # Run as specific UID
+        fsGroup: 2000               # File system group
+        seccompProfile:
+          type: RuntimeDefault      # Use default seccomp profile
+      
+      containers:
+      - name: app
+        image: your-app:latest
+        
+        # Container-level security context
+        securityContext:
+          allowPrivilegeEscalation: false   # Can't gain more privileges
+          runAsNonRoot: true                 # Enforce non-root
+          runAsUser: 1000                    # Run as UID 1000
+          readOnlyRootFilesystem: true      # Root filesystem is read-only
+          capabilities:
+            drop:
+              - ALL                          # Drop all capabilities
+            # add:                           # Only add if needed
+            #   - NET_BIND_SERVICE           # If binding to port <1024
+        
+        # Resource limits (prevent DoS)
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Volume mounts (for read-only root filesystem)
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+          - name: cache
+            mountPath: /app/cache
+      
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+      
+      # Don't run privileged containers
+      # automountServiceAccountToken: false  # If app doesn't need K8s API access

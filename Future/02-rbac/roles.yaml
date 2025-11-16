@@ -1,0 +1,122 @@
+# Developer Role - Can view and debug, but not delete
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: dev
+rules:
+  # View resources
+  - apiGroups: ["", "apps", "batch"]
+    resources: ["pods", "pods/log", "pods/exec", "deployments", "services", "configmaps", "jobs"]
+    verbs: ["get", "list", "watch"]
+  
+  # Port-forward for debugging
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  
+  # View secrets (but not edit)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+---
+# Read-Only Role - View only, no changes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: viewer
+  namespace: dev
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
+---
+# Admin Role - Full access to dev namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: admin
+  namespace: dev
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+
+---
+# Production Read-Only - No one should modify production directly
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: production-viewer
+  namespace: production
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  
+  # Allow viewing logs for debugging
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+
+---
+# Example: Bind user to developer role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: dev
+subjects:
+  - kind: User
+    name: developer@freshbonds.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# CI/CD Service Account - Limited permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cicd-deployer
+  namespace: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cicd-deployer
+  namespace: dev
+rules:
+  # Can create and update deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  
+  # Can view pods and services
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list"]
+  
+  # Can create secrets (for sealed secrets)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "update"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cicd-deployer-binding
+  namespace: dev
+subjects:
+  - kind: ServiceAccount
+    name: cicd-deployer
+    namespace: dev
+roleRef:
+  kind: Role
+  name: cicd-deployer
+  apiGroup: rbac.authorization.k8s.io
