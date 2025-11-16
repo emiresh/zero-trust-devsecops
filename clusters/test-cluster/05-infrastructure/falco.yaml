@@ -136,7 +136,7 @@ spec:
           config:
             # AlertManager integration
             alertmanager:
-              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093"
+              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093/api/v2/alerts"
               minimumpriority: "warning"
               checkcert: false
             
