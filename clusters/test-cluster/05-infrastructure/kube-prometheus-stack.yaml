@@ -107,59 +107,70 @@ spec:
           enabled: true
           
           # AlertManager configuration
-          # Note: Slack webhook URL is stored in a Kubernetes Secret for security
-          # Secret name: alertmanager-slack-webhook (namespace: monitoring)
+          # Note: PagerDuty integration key is stored in a Kubernetes Secret for security
+          # Secret name: alertmanager-pagerduty-key (namespace: monitoring)
           config:
             global:
               resolve_timeout: 5m
-              # Slack webhook URL will be injected from secret
-              # To update: kubectl create secret generic alertmanager-slack-webhook \
-              #   --from-literal=slack-api-url="YOUR_WEBHOOK_URL" -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+              pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
             
             route:
               group_by: ['alertname', 'cluster', 'service']
               group_wait: 10s
               group_interval: 10s
               repeat_interval: 12h
-              receiver: 'slack-notifications'
+              receiver: 'pagerduty-notifications'
               routes:
                 - match:
                     alertname: Watchdog
                   receiver: 'null'
                 - match:
                     severity: critical
-                  receiver: 'slack-notifications'
-                  continue: true
+                  receiver: 'pagerduty-critical'
+                  continue: false
                 - match:
                     severity: warning
-                  receiver: 'slack-notifications'
-                  continue: true
+                  receiver: 'pagerduty-notifications'
+                  continue: false
             
             receivers:
               - name: 'null'
-              - name: 'slack-notifications'
-                slack_configs:
-                  - api_url_file: /etc/alertmanager/secrets/alertmanager-slack-webhook/slack-webhook-url
-                    channel: '#alerts'
-                    # Custom title with emoji for firing vs resolved
-                    title: '{{ if eq .Status "firing" }}🚨 ALERT{{ else }}✅ RESOLVED{{ end }}: {{ .CommonLabels.alertname }}'
-                    text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
-                    send_resolved: true
-                    color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
-                    title_link: '{{ template "slack.default.titlelink" . }}'
-                    fields:
-                      - title: 'Status'
-                        value: '{{ if eq .Status "firing" }}🔴 FIRING{{ else }}🟢 RESOLVED{{ end }}'
-                        short: true
-                      - title: 'Severity'
-                        value: '{{ .CommonLabels.severity | toUpper }}'
-                        short: true
-                      - title: 'Alert'
-                        value: '{{ .CommonLabels.alertname }}'
-                        short: true
-                      - title: 'Namespace'
-                        value: '{{ .CommonLabels.namespace }}'
-                        short: true
+              
+              - name: 'pagerduty-critical'
+                pagerduty_configs:
+                  - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
+                    severity: critical
+                    description: '{{ .CommonAnnotations.summary }}'
+                    details:
+                      firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      num_firing: '{{ .Alerts.Firing | len }}'
+                      num_resolved: '{{ .Alerts.Resolved | len }}'
+                      cluster: '{{ .CommonLabels.cluster }}'
+                      namespace: '{{ .CommonLabels.namespace }}'
+                      pod: '{{ .CommonLabels.pod }}'
+                      severity: '{{ .CommonLabels.severity }}'
+                    links:
+                      - href: '{{ template "pagerduty.default.link" . }}'
+                        text: 'View in Prometheus'
+              
+              - name: 'pagerduty-notifications'
+                pagerduty_configs:
+                  - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
+                    severity: warning
+                    description: '{{ .CommonAnnotations.summary }}'
+                    details:
+                      firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      num_firing: '{{ .Alerts.Firing | len }}'
+                      num_resolved: '{{ .Alerts.Resolved | len }}'
+                      cluster: '{{ .CommonLabels.cluster }}'
+                      namespace: '{{ .CommonLabels.namespace }}'
+                      pod: '{{ .CommonLabels.pod }}'
+                      severity: '{{ .CommonLabels.severity }}'
+                    links:
+                      - href: '{{ template "pagerduty.default.link" . }}'
+                        text: 'View in Prometheus'
             
             templates:
               - '/etc/alertmanager/config/*.tmpl'
@@ -167,9 +178,9 @@ spec:
           alertmanagerSpec:
             replicas: 1
             
-            # Mount the secret containing Slack webhook URL
+            # Mount the secret containing PagerDuty integration key
             secrets:
-              - alertmanager-slack-webhook
+              - alertmanager-pagerduty-key
             
             # Storage configuration
             storage:
