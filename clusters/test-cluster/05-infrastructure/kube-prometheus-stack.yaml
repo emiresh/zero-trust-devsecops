@@ -150,9 +150,6 @@ spec:
                       namespace: '{{ .CommonLabels.namespace }}'
                       pod: '{{ .CommonLabels.pod }}'
                       severity: '{{ .CommonLabels.severity }}'
-                    links:
-                      - href: '{{ template "pagerduty.default.link" . }}'
-                        text: 'View in Prometheus'
               
               - name: 'pagerduty-notifications'
                 pagerduty_configs:
@@ -168,9 +165,6 @@ spec:
                       namespace: '{{ .CommonLabels.namespace }}'
                       pod: '{{ .CommonLabels.pod }}'
                       severity: '{{ .CommonLabels.severity }}'
-                    links:
-                      - href: '{{ template "pagerduty.default.link" . }}'
-                        text: 'View in Prometheus'
             
             templates:
               - '/etc/alertmanager/config/*.tmpl'
