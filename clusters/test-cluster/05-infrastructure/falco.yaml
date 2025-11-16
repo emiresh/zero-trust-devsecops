@@ -14,9 +14,13 @@ spec:
     helm:
       values: |
         # Falco configuration
+        # For Oracle Cloud ARM with kernel 6.8+, use modern eBPF
         driver:
           enabled: true
-          kind: kmod  # Use kernel module (most compatible)
+          kind: modern_ebpf
+          modern_ebpf:
+            cpus_for_each_buffer: 2
+            buf_size_preset: 4
         
         # Enable gRPC output for falcosidekick
         grpc:
