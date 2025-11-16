@@ -76,44 +76,26 @@ spec:
                 spawned_process and
                 container and
                 shell_procs and
-                proc.tty != 0 and
-                container_entrypoint
+                proc.tty != 0
               output: >
-                Shell spawned in container (user=%user.name %container.info
+                Shell spawned in container (user=%user.name container=%container.name
                 shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline terminal=%proc.tty
-                %container.info)
+                image=%container.image.repository)
               priority: WARNING
               tags: [container, shell, mitre_execution]
             
-            # Detect sensitive file read
-            - rule: Read Sensitive File
-              desc: Detect reads of sensitive files
-              condition: >
-                open_read and
-                fd.name in (sensitive_files) and
-                not proc.name in (user_known_read_sensitive_files_activities)
-              output: >
-                Sensitive file opened for reading (user=%user.name
-                file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline
-                gparent=%proc.aname[2] container_id=%container.id image=%container.image.repository)
-              priority: WARNING
-              tags: [filesystem, mitre_discovery, mitre_credential_access]
-            
-            # Detect package management in container
-            - rule: Package Management Executed in Container
+            # Detect package management in container - simplified
+            - rule: Package Management in Container
               desc: Package management tools executed in container
               condition: >
                 spawned_process and
                 container and
-                user.name != "_apt" and
-                package_mgmt_procs and
-                not package_mgmt_ancestor_procs and
-                not user_known_package_manager_in_container
+                proc.name in (apt, apt-get, yum, dnf, rpm, dpkg, apk, pip, pip3, npm, yarn)
               output: >
-                Package management process launched in container (user=%user.name
-                command=%proc.cmdline container_id=%container.id container_name=%container.name
+                Package management process in container (user=%user.name
+                command=%proc.cmdline container=%container.name
                 image=%container.image.repository:%container.image.tag)
-              priority: ERROR
+              priority: NOTICE
               tags: [container, process, mitre_persistence]
             
             # Detect crypto mining
@@ -121,13 +103,14 @@ spec:
               desc: Detect cryptocurrency miners
               condition: >
                 spawned_process and
-                (proc.name in (crypto_miners) or
-                 (proc.cmdline contains "stratum+tcp" or
-                  proc.cmdline contains "xmr-stak" or
-                  proc.cmdline contains "xmrig"))
+                (proc.name in (xmrig, cpuminer, ethminer, ccminer) or
+                 proc.cmdline contains "stratum+tcp" or
+                 proc.cmdline contains "xmr-stak" or
+                 proc.cmdline contains "xmrig" or
+                 proc.cmdline contains "minerd")
               output: >
                 Crypto mining activity detected (user=%user.name
-                command=%proc.cmdline container=%container.info)
+                command=%proc.cmdline container=%container.name)
               priority: CRITICAL
               tags: [process, mitre_impact]
         
