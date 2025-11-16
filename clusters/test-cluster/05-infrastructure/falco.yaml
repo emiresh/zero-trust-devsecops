@@ -92,7 +92,7 @@ spec:
                 Package management process in container (user=%user.name
                 command=%proc.cmdline container=%container.name
                 image=%container.image.repository:%container.image.tag)
-              priority: NOTICE
+              priority: WARNING
               tags: [container, process, mitre_persistence]
             
             # Detect crypto mining
