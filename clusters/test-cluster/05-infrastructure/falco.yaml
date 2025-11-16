@@ -9,17 +9,15 @@ spec:
   project: default
   source:
     repoURL: https://falcosecurity.github.io/charts
-    targetRevision: 4.9.0
+    targetRevision: 7.0.0  # Falco 0.42.0 with kernel 6.8+ support
     chart: falco
     helm:
       values: |
-        # Falco configuration
-        # For Oracle Cloud ARM with kernel 6.x+, use standard eBPF
+        # Falco configuration - v0.42.0 with kernel 6.8+ support
+        # Use modern eBPF for Oracle Cloud ARM
         driver:
           enabled: true
-          kind: ebpf
-          ebpf:
-            leastPrivileged: false
+          kind: modern_ebpf
         
         # Enable gRPC output for falcosidekick
         grpc:
