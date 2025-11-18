@@ -328,13 +328,13 @@ jobs:
             echo "✅ All Checkov security checks passed!" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Upload Checkov Results to GitHub Security Tab
+      - name: Upload Checkov Results as Artifact
         if: always()
-        continue-on-error: true  # Don't fail build if SARIF upload has permission issues
-        uses: github/codeql-action/upload-sarif@v4
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: results_sarif.sarif
-          category: checkov-iac
+          name: checkov-sarif-results
+          path: results_sarif.sarif
+          retention-days: 30
 
   # ==========================================
   # STAGE 3: Build, Test, Scan, Push
