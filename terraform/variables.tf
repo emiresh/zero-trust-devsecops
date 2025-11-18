@@ -57,7 +57,7 @@ variable "subnet_cidr_block" {
 variable "allowed_ssh_cidrs" {
   description = "List of CIDR blocks allowed to SSH"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["10.0.0.0/8"] # Restrict to private network by default
 }
 
 variable "allowed_k8s_api_cidrs" {

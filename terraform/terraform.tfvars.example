@@ -47,8 +47,8 @@ ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC..."
 vcn_cidr_block    = "10.0.0.0/16"
 subnet_cidr_block = "10.0.1.0/24"
 
-# CIDRs allowed to SSH (0.0.0.0/0 = anywhere)
-allowed_ssh_cidrs = ["0.0.0.0/0"]
+# CIDRs allowed to SSH (10.0.0.0/8 = private network, or use your specific IP)
+allowed_ssh_cidrs = ["10.0.0.0/8"]  # Or replace with ["YOUR.IP.ADDRESS.HERE/32"]
 
 # CIDRs allowed to access Kubernetes API
 allowed_k8s_api_cidrs = ["0.0.0.0/0"]

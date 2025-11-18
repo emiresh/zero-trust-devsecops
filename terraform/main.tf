@@ -174,6 +174,14 @@ resource "oci_core_network_security_group_security_rule" "egress_all" {
   destination_type = "CIDR_BLOCK"
   destination      = "0.0.0.0/0"
   stateless        = true
+  
+  tcp_options {
+    # Allow all TCP ports except RDP (3389) for security
+    source_port_range {
+      min = 1
+      max = 65535
+    }
+  }
 }
 
 # ==========================================
