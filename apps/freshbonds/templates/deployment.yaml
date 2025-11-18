@@ -18,6 +18,7 @@ spec:
         app: {{ .name }}
     spec:
       securityContext:
+        runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
@@ -28,13 +29,27 @@ spec:
         - name: http
           containerPort: {{ .service.targetPort }}
           protocol: TCP
+        {{- if .resources }}
         resources:
+          {{- if .resources.limits }}
           limits:
             cpu: {{ .resources.limits.cpu | default "500m" }}
             memory: {{ .resources.limits.memory | default "512Mi" }}
+          {{- end }}
+          {{- if .resources.requests }}
           requests:
             cpu: {{ .resources.requests.cpu | default "100m" }}
             memory: {{ .resources.requests.memory | default "128Mi" }}
+          {{- end }}
+        {{- else }}
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

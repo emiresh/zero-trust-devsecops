@@ -14,7 +14,7 @@ deployments:
   - name: apigateway
     replicaCount: 2
     image:
-      repository: emiresh/freshbonds-api-gateway
+      repository: docker.io/emiresh/freshbonds-api-gateway
       tag: v1.2.3
       pullPolicy: IfNotPresent
     service:
@@ -50,7 +50,7 @@ deployments:
   - name: frontend
     replicaCount: 2
     image:
-      repository: emiresh/freshbonds-frontend
+      repository: docker.io/emiresh/freshbonds-frontend
       tag: v1.2.3
       pullPolicy: IfNotPresent
     service:
@@ -74,7 +74,7 @@ deployments:
   - name: product-service
     replicaCount: 2
     image:
-      repository: emiresh/freshbonds-product-service
+      repository: docker.io/emiresh/freshbonds-product-service
       tag: v1.2.3
       pullPolicy: IfNotPresent
     service:
@@ -106,7 +106,7 @@ deployments:
   - name: user-service
     replicaCount: 2
     image:
-      repository: emiresh/freshbonds-user-service
+      repository: docker.io/emiresh/freshbonds-user-service
       tag: v1.2.3
       pullPolicy: IfNotPresent
     service:
