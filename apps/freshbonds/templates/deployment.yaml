@@ -17,6 +17,10 @@ spec:
       labels:
         app: {{ .name }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: {{ .name }}
         image: "{{ .image.repository }}:{{ .image.tag }}"
@@ -25,6 +29,20 @@ spec:
         - name: http
           containerPort: {{ .service.targetPort }}
           protocol: TCP
+        resources:
+          limits:
+            cpu: {{ .resources.limits.cpu | default "500m" }}
+            memory: {{ .resources.limits.memory | default "512Mi" }}
+          requests:
+            cpu: {{ .resources.requests.cpu | default "100m" }}
+            memory: {{ .resources.requests.memory | default "128Mi" }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
         {{- if .healthCheck }}
         livenessProbe:
           httpGet:
