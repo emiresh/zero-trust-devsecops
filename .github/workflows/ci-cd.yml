@@ -148,7 +148,14 @@ jobs:
           # Test Kubernetes manifests
           if [[ -d "clusters" ]]; then
             echo "Testing Kubernetes manifests..."
-            conftest test --policy ./policies/opa clusters/**/*.yaml || echo "⚠️ Some policies failed"
+            YAML_FILES=$(find clusters -name "*.yaml" -o -name "*.yml")
+            if [[ -n "$YAML_FILES" ]]; then
+              echo "$YAML_FILES" | xargs conftest test --policy ./policies/opa || echo "⚠️ Some policies failed"
+            else
+              echo "No YAML files found in clusters/"
+            fi
+          else
+            echo "⚠️ clusters/ directory not found, skipping OPA tests"
           fi
 
       - name: Run Kyverno Policy Tests
@@ -163,9 +170,16 @@ jobs:
           rm kyverno-cli_v1.11.0_linux_x86_64.tar.gz
           
           # Test policies
-          if [[ -d "policies/kyverno" ]]; then
+          if [[ -d "policies/kyverno" && -d "clusters" ]]; then
             echo "Testing Kyverno policies..."
-            kyverno apply policies/kyverno/*.yaml --resource clusters/**/*.yaml || echo "⚠️ Some policies failed"
+            YAML_FILES=$(find clusters -name "*.yaml" -o -name "*.yml")
+            if [[ -n "$YAML_FILES" ]]; then
+              echo "$YAML_FILES" | tr '\n' ',' | xargs -d ',' -I {} kyverno apply policies/kyverno/*.yaml --resource {} || echo "⚠️ Some policies failed"
+            else
+              echo "No YAML files found in clusters/"
+            fi
+          else
+            echo "⚠️ clusters/ or policies/kyverno/ directory not found, skipping Kyverno tests"
           fi
 
       - name: Run Checkov (IaC Security Scanning)
