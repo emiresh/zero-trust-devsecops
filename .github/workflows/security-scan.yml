@@ -169,26 +169,28 @@ jobs:
             }
 
       - name: Send PagerDuty Alert
-        if: steps.analyze.outputs.critical != '0' && secrets.PAGERDUTY_INTEGRATION_KEY != ''
+        if: steps.analyze.outputs.critical != '0'
         run: |
-          curl -X POST https://events.pagerduty.com/v2/enqueue \
-            -H 'Content-Type: application/json' \
-            -d '{
-              "routing_key": "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}",
-              "event_action": "trigger",
-              "payload": {
-                "summary": "Critical Vulnerabilities in ${{ matrix.service }}",
-                "severity": "critical",
-                "source": "Security Scanner",
-                "custom_details": {
-                  "service": "${{ matrix.service }}",
-                  "critical_count": "${{ steps.analyze.outputs.critical }}",
-                  "high_count": "${{ steps.analyze.outputs.high }}",
-                  "image": "${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest",
-                  "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [[ -n "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}" ]]; then
+            curl -X POST https://events.pagerduty.com/v2/enqueue \
+              -H 'Content-Type: application/json' \
+              -d '{
+                "routing_key": "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}",
+                "event_action": "trigger",
+                "payload": {
+                  "summary": "Critical Vulnerabilities in ${{ matrix.service }}",
+                  "severity": "critical",
+                  "source": "Security Scanner",
+                  "custom_details": {
+                    "service": "${{ matrix.service }}",
+                    "critical_count": "${{ steps.analyze.outputs.critical }}",
+                    "high_count": "${{ steps.analyze.outputs.high }}",
+                    "image": "${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest",
+                    "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
                 }
-              }
-            }'
+              }'
+          fi
 
       - name: Upload Scan Results
         if: always()
