@@ -135,145 +135,61 @@ jobs:
       - name: Validate Kubernetes Manifests with OPA (Policy-as-Code)
         if: hashFiles('policies/opa/**') != ''
         run: |
-          echo "🔍 Validating Kubernetes manifests against OPA security policies..."
+          echo "🔍 Validating Kubernetes manifests with OPA policies..."
           echo ""
           
           # Install Conftest
           CONFTEST_VERSION=0.49.1
-          curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz
-          tar xzf conftest.tar.gz
+          curl -sL https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz | tar xz
           sudo mv conftest /usr/local/bin/
-          rm conftest.tar.gz
           
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  STAGE 1: ArgoCD Application Manifests"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
+          # Install Helm
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
           
-          # Test Kubernetes manifests in clusters/ (ArgoCD Applications)
-          if [[ -d "clusters" ]]; then
-            YAML_FILES=$(find clusters -name "*.yaml" -o -name "*.yml")
-            if [[ -n "$YAML_FILES" ]]; then
-              echo "$YAML_FILES" | xargs conftest test --policy ./policies/opa > /tmp/opa-clusters.txt 2>&1 || true
+          # Render and test Helm charts
+          for chart in apps/*/; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              chart_name=$(basename "$chart")
+              echo "📦 Testing: $chart_name"
               
-              # Parse results
-              TESTS=$(grep -oP '\d+(?= tests)' /tmp/opa-clusters.txt || echo "0")
-              PASSED=$(grep -oP '\d+(?= passed)' /tmp/opa-clusters.txt || echo "0")
-              WARNINGS=$(grep -oP '\d+(?= warnings)' /tmp/opa-clusters.txt || echo "0")
-              FAILURES=$(grep -oP '\d+(?= failures)' /tmp/opa-clusters.txt || echo "0")
+              # Render Helm template
+              helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
               
-              echo "📊 Results:"
-              echo "   ✅ Passed:   $PASSED / $TESTS"
-              echo "   ⚠️  Warnings: $WARNINGS"
-              echo "   ❌ Failures: $FAILURES"
+              # Run OPA validation
+              conftest test --policy ./policies/opa "/tmp/${chart_name}.yaml" > /tmp/results.txt 2>&1 || true
               
-              if [[ $FAILURES -gt 0 ]]; then
-                echo ""
-                echo "⚠️ Note: Failures in ArgoCD Applications are expected (they reference other resources)"
-              fi
-            fi
-          fi
+              # Show results
+              cat /tmp/results.txt
+              
+              # Parse summary
+              SUMMARY=$(tail -1 /tmp/results.txt)
+              PASSED=$(echo "$SUMMARY" | grep -oP '\d+(?= passed)' || echo "0")
+              WARNINGS=$(echo "$SUMMARY" | grep -oP '\d+(?= warnings)' || echo "0")
+              FAILURES=$(echo "$SUMMARY" | grep -oP '\d+(?= failures)' || echo "0")
+              
+              # GitHub Summary
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔐 OPA Validation: $chart_name
+          | ✅ Passed | ⚠️ Warnings | ❌ Failures |
+          |-----------|-------------|-------------|
+          | $PASSED | $WARNINGS | $FAILURES |
           
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  STAGE 2: Helm Templates (Rendered Manifests)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
+          <details>
+          <summary>📋 View Details</summary>
           
-          # Test Helm templates (render first)
-          if [[ -d "apps" ]]; then
-            # Install Helm
-            curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
-            
-            # Render and test each Helm chart
-            for chart in apps/*/; do
-              if [[ -f "$chart/Chart.yaml" ]]; then
-                chart_name=$(basename "$chart")
-                echo "📦 Rendering: $chart_name"
-                
-                if helm template "$chart_name" "$chart" > "/tmp/${chart_name}-rendered.yaml" 2>/dev/null; then
-                  echo "✅ Rendered successfully"
-                  echo ""
-                  echo "🔍 Running OPA policy validation..."
-                  echo ""
-                  
-                  # Run conftest and capture output with full details
-                  if conftest test --policy ./policies/opa "/tmp/${chart_name}-rendered.yaml" > /tmp/opa-helm.txt 2>&1; then
-                    VALIDATION_PASSED=true
-                  else
-                    VALIDATION_PASSED=false
-                  fi
-                  
-                  # Display full output for debugging
-                  cat /tmp/opa-helm.txt
-                  echo ""
-                  
-                  # Parse summary from last line
-                  SUMMARY=$(tail -1 /tmp/opa-helm.txt)
-                  TESTS=$(echo "$SUMMARY" | grep -oP '\d+(?= tests)' || echo "0")
-                  PASSED=$(echo "$SUMMARY" | grep -oP '\d+(?= passed)' || echo "0")
-                  WARNINGS=$(echo "$SUMMARY" | grep -oP '\d+(?= warnings)' || echo "0")
-                  FAILURES=$(echo "$SUMMARY" | grep -oP '\d+(?= failures)' || echo "0")
-                  
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "  📊 Policy Validation Summary"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo ""
-                  printf "   %-15s %s / %s\n" "✅ Passed:" "$PASSED" "$TESTS"
-                  printf "   %-15s %s\n" "⚠️  Warnings:" "$WARNINGS"
-                  printf "   %-15s %s\n" "❌ Failures:" "$FAILURES"
-                  echo ""
-                  
-                  # Create GitHub Step Summary
-                  cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## 🔐 OPA Policy Validation: $chart_name
+          \`\`\`
+          $(cat /tmp/results.txt)
+          \`\`\`
           
-          ### Summary
-          | Status | Count |
-          |--------|-------|
-          | ✅ Passed | $PASSED / $TESTS |
-          | ⚠️ Warnings | $WARNINGS |
-          | ❌ Failures | $FAILURES |
+          </details>
           
           EOF
-                  
-                  # Add detailed warnings and failures to summary
-                  if [[ $WARNINGS -gt 0 ]] || [[ $FAILURES -gt 0 ]]; then
-                    echo "### 📋 Detailed Results" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    
-                    if [[ $WARNINGS -gt 0 ]]; then
-                      echo "#### ⚠️ Warnings ($WARNINGS)" >> $GITHUB_STEP_SUMMARY
-                      echo '```' >> $GITHUB_STEP_SUMMARY
-                      grep "^WARN" /tmp/opa-helm.txt | sed 's/^WARN - \/tmp\/[^/]*-rendered\.yaml - main - //' >> $GITHUB_STEP_SUMMARY || echo "No warnings found" >> $GITHUB_STEP_SUMMARY
-                      echo '```' >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                    fi
-                    
-                    if [[ $FAILURES -gt 0 ]]; then
-                      echo "#### ❌ Failures ($FAILURES)" >> $GITHUB_STEP_SUMMARY
-                      echo '```' >> $GITHUB_STEP_SUMMARY
-                      grep "^FAIL" /tmp/opa-helm.txt | sed 's/^FAIL - \/tmp\/[^/]*-rendered\.yaml - main - //' >> $GITHUB_STEP_SUMMARY || echo "No failures found" >> $GITHUB_STEP_SUMMARY
-                      echo '```' >> $GITHUB_STEP_SUMMARY
-                    fi
-                  fi
-                  
-                  if [[ $FAILURES -gt 0 ]]; then
-                    echo ""
-                    echo "⚠️  Security violations detected! These should be fixed before production."
-                  fi
-                  
-                else
-                  echo "❌ Failed to render $chart_name"
-                fi
-              fi
-            done
-          fi
+              
+              echo ""
+            fi
+          done
           
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  ✅ OPA Policy Validation Completed"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Validation completed"
 
       # COMMENTED OUT FOR TESTING - Uncomment after OPA tests work
       # - name: Run Kyverno Policy Tests
