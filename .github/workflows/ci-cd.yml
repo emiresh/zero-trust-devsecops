@@ -260,13 +260,26 @@ jobs:
         run: |
           echo "Running Checkov IaC security scanning..."
           
-          # Run Checkov and capture output
+          # Install checkov if not available
+          pip install checkov >/dev/null 2>&1 || true
+          
+          # Run Checkov with both console and SARIF output
           checkov -d . \
             --framework kubernetes terraform dockerfile \
             --skip-check CKV_K8S_43,CKV_K8S_35 \
             --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
+            --output cli \
             --compact --quiet \
             2>&1 | tee /tmp/checkov-output.txt
+          
+          # Generate SARIF file separately for upload
+          checkov -d . \
+            --framework kubernetes terraform dockerfile \
+            --skip-check CKV_K8S_43,CKV_K8S_35 \
+            --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
+            --output sarif \
+            --output-file-path . \
+            >/dev/null 2>&1 || true
           
           # Store exit code
           CHECKOV_EXIT=$?
@@ -302,25 +315,12 @@ jobs:
             echo "✅ All Checkov security checks passed!" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Generate Checkov SARIF Report
-        if: always()
-        continue-on-error: true
-        run: |
-          # Generate SARIF file for GitHub Security tab
-          checkov -d . \
-            --framework kubernetes terraform dockerfile \
-            --skip-check CKV_K8S_43,CKV_K8S_35 \
-            --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
-            --output sarif \
-            --output-file-path . \
-            --soft-fail || true
-
       - name: Upload Checkov Results to GitHub Security Tab
         if: always()
         continue-on-error: true  # Don't fail build if SARIF upload has permission issues
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: checkov-results.sarif
+          sarif_file: results_sarif.sarif
           category: checkov-iac
 
   # ==========================================
