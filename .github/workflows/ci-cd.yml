@@ -218,17 +218,21 @@ jobs:
               kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml" > /tmp/kyverno-results.txt 2>&1 || true
               
               cat /tmp/kyverno-results.txt
+              echo ""
               
-              # Parse results
-              PASSED=$(grep -c "pass" /tmp/kyverno-results.txt || echo "0")
-              FAILED=$(grep -c "fail" /tmp/kyverno-results.txt || echo "0")
+              # Parse results from summary line (e.g., "pass: 28, fail: 0, warn: 0, error: 0, skip: 8")
+              SUMMARY=$(grep -E "^pass:" /tmp/kyverno-results.txt || echo "pass: 0")
+              PASSED=$(echo "$SUMMARY" | grep -oP 'pass:\s*\K\d+' || echo "0")
+              FAILED=$(echo "$SUMMARY" | grep -oP 'fail:\s*\K\d+' || echo "0")
+              WARNINGS=$(echo "$SUMMARY" | grep -oP 'warn:\s*\K\d+' || echo "0")
+              SKIPPED=$(echo "$SUMMARY" | grep -oP 'skip:\s*\K\d+' || echo "0")
               
               # GitHub Summary
               cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🛡️ Kyverno Validation: $chart_name
-          | ✅ Passed | ❌ Failed |
-          |-----------|----------|
-          | $PASSED | $FAILED |
+          | ✅ Passed | ❌ Failed | ⚠️ Warnings | ⏭️ Skipped |
+          |-----------|----------|-------------|-----------|
+          | $PASSED | $FAILED | $WARNINGS | $SKIPPED |
           
           <details>
           <summary>📋 View Details</summary>
