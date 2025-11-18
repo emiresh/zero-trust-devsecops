@@ -12,10 +12,39 @@ spec:
         app: db-init
     spec:
       restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: db-init
         image: emiresh/freshbonds-user-service:v1.2.1
+        imagePullPolicy: Always
         workingDir: /app
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10000
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+          - name: app-cache
+            mountPath: /app/.npm
         command:
           - node
           - -e
@@ -83,4 +112,9 @@ spec:
               name: freshbonds-secrets
           - secretRef:
               name: admin-user-init
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: app-cache
+          emptyDir: {}
 

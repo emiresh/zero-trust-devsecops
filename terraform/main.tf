@@ -170,15 +170,34 @@ resource "oci_core_network_security_group_security_rule" "egress_all" {
   direction                 = "EGRESS"
   protocol                  = "6" # TCP only for security
   
-  description      = "Allow TCP outbound traffic"
+  description      = "Allow TCP outbound traffic (excluding RDP)"
   destination_type = "CIDR_BLOCK"
   destination      = "0.0.0.0/0"
   stateless        = true
   
   tcp_options {
-    # Allow all TCP ports except RDP (3389) for security
-    source_port_range {
+    # Restrict destination ports - allow standard ports, block RDP (3389)
+    destination_port_range {
       min = 1
+      max = 3388  # Stop before RDP port 3389
+    }
+  }
+}
+
+# Additional egress for high ports (above RDP)
+resource "oci_core_network_security_group_security_rule" "egress_high_ports" {
+  network_security_group_id = oci_core_network_security_group.main.id
+  direction                 = "EGRESS"
+  protocol                  = "6" # TCP only
+  
+  description      = "Allow TCP outbound traffic (high ports above RDP)"
+  destination_type = "CIDR_BLOCK"
+  destination      = "0.0.0.0/0"
+  stateless        = true
+  
+  tcp_options {
+    destination_port_range {
+      min = 3390  # Start after RDP port 3389
       max = 65535
     }
   }
