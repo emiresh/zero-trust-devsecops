@@ -1,0 +1,16 @@
+# Trivy Ignore File
+# Add CVE IDs here to ignore specific vulnerabilities
+# Format: CVE-ID or GHSA-ID
+
+# Example: Ignore specific CVEs that are false positives or accepted risks
+# CVE-2023-12345
+# GHSA-xxxx-yyyy-zzzz
+
+# Node.js related (if using old LTS with known but mitigated issues)
+# CVE-2023-xxxxx
+
+# Alpine/base image issues that don't affect your use case
+# CVE-2023-yyyyy
+
+# Add reason for ignoring (as comment)
+# CVE-2023-12345  # False positive - not using affected functionality

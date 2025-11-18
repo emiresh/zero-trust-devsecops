@@ -1,0 +1,534 @@
+name: Security Scanning - Scheduled
+
+on:
+  schedule:
+    # Run security scans every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of scan to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - images
+          - policies
+          - dependencies
+          - iac
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+env:
+  DOCKER_REGISTRY: docker.io
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  # ==========================================
+  # Image Vulnerability Scanning
+  # ==========================================
+  scan-images:
+    name: 🔍 Scan Docker Images
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.scan_type == 'all' || 
+      github.event.inputs.scan_type == 'images' ||
+      github.event_name == 'schedule'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [frontend, api-gateway, user-service, product-service]
+    
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Pull Latest Image
+        run: |
+          docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+
+      - name: Run Trivy Scan
+        run: |
+          echo "🔍 Scanning ${{ matrix.service }} for vulnerabilities..."
+          
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$(pwd):/workspace" \
+            aquasec/trivy:latest image \
+            --format json \
+            --output /workspace/trivy-${{ matrix.service }}.json \
+            --severity CRITICAL,HIGH,MEDIUM,LOW \
+            --vuln-type os,library \
+            --no-progress \
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+
+      - name: Analyze Results
+        id: analyze
+        run: |
+          RESULTS_FILE="trivy-${{ matrix.service }}.json"
+          
+          if [[ ! -f "$RESULTS_FILE" ]]; then
+            echo "⚠️ Results file not found"
+            exit 0
+          fi
+          
+          CRITICAL=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          HIGH=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          MEDIUM=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          
+          echo "📊 Vulnerabilities found:"
+          echo "   🔴 Critical: $CRITICAL"
+          echo "   🟠 High: $HIGH"
+          echo "   🟡 Medium: $MEDIUM"
+          
+          # Create issue if critical vulnerabilities found
+          if [[ $CRITICAL -gt 0 ]] || [[ $HIGH -gt 0 ]]; then
+            echo "should_alert=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_alert=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Issue
+        if: steps.analyze.outputs.should_alert == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const service = '${{ matrix.service }}';
+            const critical = '${{ steps.analyze.outputs.critical }}';
+            const high = '${{ steps.analyze.outputs.high }}';
+            const medium = '${{ steps.analyze.outputs.medium }}';
+            
+            const title = `🔐 Security Alert: Vulnerabilities in ${service}`;
+            const body = `## Security Scan Results
+            
+            **Service:** \`${service}\`
+            **Image:** \`${{ env.IMAGE_PREFIX }}/${service}:latest\`
+            **Scan Date:** ${new Date().toISOString()}
+            
+            ### Vulnerability Summary
+            | Severity | Count |
+            |----------|-------|
+            | 🔴 Critical | ${critical} |
+            | 🟠 High | ${high} |
+            | 🟡 Medium | ${medium} |
+            
+            ### Recommended Actions
+            1. Review the Trivy scan results in the workflow artifacts
+            2. Update base image and dependencies
+            3. Rebuild and redeploy the service
+            4. Verify vulnerabilities are resolved
+            
+            ### Workflow Run
+            [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ---
+            *This issue was automatically created by the security scanning workflow.*
+            `;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['security', 'automated']
+            });
+            
+            const existingIssue = issues.data.find(issue => 
+              issue.title.includes(service)
+            );
+            
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `**Updated Scan Results (${new Date().toISOString()})**\n\n${body}`
+              });
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'automated', 'vulnerability']
+              });
+            }
+
+      - name: Send PagerDuty Alert
+        if: steps.analyze.outputs.critical != '0' && secrets.PAGERDUTY_INTEGRATION_KEY != ''
+        run: |
+          curl -X POST https://events.pagerduty.com/v2/enqueue \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "routing_key": "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}",
+              "event_action": "trigger",
+              "payload": {
+                "summary": "Critical Vulnerabilities in ${{ matrix.service }}",
+                "severity": "critical",
+                "source": "Security Scanner",
+                "custom_details": {
+                  "service": "${{ matrix.service }}",
+                  "critical_count": "${{ steps.analyze.outputs.critical }}",
+                  "high_count": "${{ steps.analyze.outputs.high }}",
+                  "image": "${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest",
+                  "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            }'
+
+      - name: Upload Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-${{ matrix.service }}
+          path: trivy-${{ matrix.service }}.json
+          retention-days: 90
+
+  # ==========================================
+  # Policy Compliance Scanning
+  # ==========================================
+  scan-policies:
+    name: 🔐 Scan Policy Compliance
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.scan_type == 'all' || 
+      github.event.inputs.scan_type == 'policies' ||
+      github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: |
+          # Install Conftest
+          CONFTEST_VERSION=0.49.1
+          curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz
+          tar xzf conftest.tar.gz
+          sudo mv conftest /usr/local/bin/
+          
+          # Install Kyverno CLI
+          curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          tar -xzf kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          sudo mv kyverno /usr/local/bin/
+
+      - name: Scan Kubernetes Manifests with OPA
+        if: hashFiles('policies/opa/**') != ''
+        run: |
+          echo "🔍 Running OPA policy checks..."
+          
+          VIOLATIONS=0
+          
+          # Test all YAML files in clusters directory
+          for file in $(find clusters -name "*.yaml" -type f); do
+            echo "Checking: $file"
+            if ! conftest test --policy ./policies/opa "$file" 2>&1 | tee -a opa-results.txt; then
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+          
+          if [[ $VIOLATIONS -gt 0 ]]; then
+            echo "⚠️ Found $VIOLATIONS policy violations"
+            echo "violations=$VIOLATIONS" >> $GITHUB_ENV
+          else
+            echo "✅ No policy violations found"
+          fi
+
+      - name: Scan with Kyverno
+        if: hashFiles('policies/kyverno/**') != ''
+        run: |
+          echo "🔍 Running Kyverno policy checks..."
+          
+          kyverno apply policies/kyverno/*.yaml \
+            --resource clusters/**/*.yaml \
+            > kyverno-results.txt 2>&1 || true
+          
+          cat kyverno-results.txt
+
+      - name: Upload Policy Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-scan-results
+          path: |
+            opa-results.txt
+            kyverno-results.txt
+          retention-days: 90
+
+  # ==========================================
+  # Dependency Scanning
+  # ==========================================
+  scan-dependencies:
+    name: 📦 Scan Dependencies
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.scan_type == 'all' || 
+      github.event.inputs.scan_type == 'dependencies' ||
+      github.event_name == 'schedule'
+    
+    strategy:
+      matrix:
+        service: [frontend, api-gateway, user-service, product-service]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run npm audit
+        run: |
+          cd src/${{ matrix.service }}
+          
+          echo "🔍 Running npm audit for ${{ matrix.service }}..."
+          
+          if npm audit --json > audit-results.json 2>&1; then
+            echo "✅ No vulnerabilities found"
+          else
+            echo "⚠️ Vulnerabilities detected"
+            
+            # Parse audit results
+            CRITICAL=$(jq -r '.metadata.vulnerabilities.critical // 0' audit-results.json)
+            HIGH=$(jq -r '.metadata.vulnerabilities.high // 0' audit-results.json)
+            MODERATE=$(jq -r '.metadata.vulnerabilities.moderate // 0' audit-results.json)
+            
+            echo "📊 Dependency Vulnerabilities:"
+            echo "   🔴 Critical: $CRITICAL"
+            echo "   🟠 High: $HIGH"
+            echo "   🟡 Moderate: $MODERATE"
+            
+            # Show fixable vulnerabilities
+            echo ""
+            echo "🛠️ Fixable vulnerabilities:"
+            npm audit fix --dry-run
+          fi
+
+      - name: Upload Audit Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ matrix.service }}
+          path: src/${{ matrix.service }}/audit-results.json
+          retention-days: 90
+
+  # ==========================================
+  # Infrastructure as Code Scanning
+  # ==========================================
+  scan-iac:
+    name: 🏗️ Scan Infrastructure as Code
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.scan_type == 'all' || 
+      github.event.inputs.scan_type == 'iac' ||
+      github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: kubernetes,terraform,dockerfile
+          soft_fail: false
+          output_format: cli,sarif,json
+          output_file_path: console,checkov-results.sarif,checkov-results.json
+          skip_check: CKV_K8S_43  # Image tag latest (handled by our workflow)
+
+      - name: Analyze Checkov Results
+        id: analyze
+        if: always()
+        run: |
+          if [[ -f "checkov-results.json" ]]; then
+            FAILED=$(jq '.summary.failed // 0' checkov-results.json)
+            PASSED=$(jq '.summary.passed // 0' checkov-results.json)
+            SKIPPED=$(jq '.summary.skipped // 0' checkov-results.json)
+            
+            echo "📊 Checkov Results:"
+            echo "   ❌ Failed: $FAILED"
+            echo "   ✅ Passed: $PASSED"
+            echo "   ⏭️  Skipped: $SKIPPED"
+            
+            echo "failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            
+            if [[ $FAILED -gt 0 ]]; then
+              echo "should_alert=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_alert=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Upload SARIF Results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov-iac
+
+      - name: Create GitHub Issue
+        if: steps.analyze.outputs.should_alert == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const failed = '${{ steps.analyze.outputs.failed }}';
+            const passed = '${{ steps.analyze.outputs.passed }}';
+            
+            const title = '🏗️ IaC Security: Checkov Policy Violations';
+            const body = `## Infrastructure as Code Security Scan
+            
+            **Scan Date:** ${new Date().toISOString()}
+            **Framework:** Kubernetes, Terraform, Dockerfile
+            
+            ### Results Summary
+            | Status | Count |
+            |--------|-------|
+            | ❌ Failed | ${failed} |
+            | ✅ Passed | ${passed} |
+            
+            ### Policy Violations Detected
+            Checkov has detected security and compliance violations in your infrastructure code.
+            
+            ### Recommended Actions
+            1. Review the Checkov SARIF results in Security tab
+            2. Check the detailed JSON results in workflow artifacts
+            3. Fix the violations in:
+               - Kubernetes manifests (clusters/)
+               - Terraform files (terraform/)
+               - Dockerfiles (src/*/Dockerfile)
+            4. Re-run the scan to verify fixes
+            
+            ### Common Violations
+            - Missing resource limits/requests
+            - Running as root user
+            - Privileged containers
+            - Missing security contexts
+            - Unencrypted volumes
+            - Missing network policies
+            
+            ### Workflow Run
+            [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ---
+            *This issue was automatically created by the IaC security scanning workflow.*
+            `;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['security', 'iac', 'checkov']
+            });
+            
+            const existingIssue = issues.data.find(issue => 
+              issue.title.includes('IaC Security')
+            );
+            
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## Updated Scan Results\n\n${body}`
+              });
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'iac', 'checkov', 'automated']
+              });
+              console.log('Created new security issue');
+            }
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-iac-scan
+          path: |
+            checkov-results.json
+            checkov-results.sarif
+          retention-days: 30
+
+      - name: Send PagerDuty Alert
+        if: failure() && steps.analyze.outputs.should_alert == 'true'
+        run: |
+          if [[ -n "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}" ]]; then
+            curl -X POST https://events.pagerduty.com/v2/enqueue \
+              -H 'Content-Type: application/json' \
+              -d '{
+                "routing_key": "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}",
+                "event_action": "trigger",
+                "dedup_key": "iac-security-${{ github.run_id }}",
+                "payload": {
+                  "summary": "IaC Security: ${{ steps.analyze.outputs.failed }} Checkov violations detected",
+                  "severity": "error",
+                  "source": "GitHub Actions",
+                  "custom_details": {
+                    "workflow": "Security Scan",
+                    "scan_type": "IaC (Checkov)",
+                    "failed_checks": "${{ steps.analyze.outputs.failed }}",
+                    "passed_checks": "${{ steps.analyze.outputs.passed }}",
+                    "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              }'
+          fi
+
+  # ==========================================
+  # Summary Report
+  # ==========================================
+  summary:
+    name: 📊 Generate Summary Report
+    runs-on: ubuntu-latest
+    needs: [scan-images, scan-policies, scan-dependencies, scan-iac]
+    if: always()
+    
+    steps:
+      - name: Create Summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🔐 Security Scan Summary
+          
+          **Scan Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          
+          ## Scan Results
+          - **Image Scanning:** ${{ needs.scan-images.result }}
+          - **Policy Compliance:** ${{ needs.scan-policies.result }}
+          - **Dependency Scanning:** ${{ needs.scan-dependencies.result }}
+          - **IaC Scanning:** ${{ needs.scan-iac.result }}
+          
+          ## Next Steps
+          1. Review artifacts for detailed results
+          2. Check GitHub Issues for created security alerts
+          3. Update vulnerable dependencies and base images
+          4. Fix IaC policy violations
+          5. Re-run scans after fixes
+          
+          ---
+          *Automated security scanning workflow*
+          EOF

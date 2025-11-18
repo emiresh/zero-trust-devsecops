@@ -1,0 +1,136 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-security-standards
+  annotations:
+    policies.kyverno.io/title: Pod Security Standards
+    policies.kyverno.io/category: Pod Security Standards
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Enforce Kubernetes Pod Security Standards for production workloads.
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    # Require runAsNonRoot
+    - name: run-as-non-root
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+            namespaces:
+              - production
+              - dev
+      validate:
+        message: "Containers must run as non-root user"
+        pattern:
+          spec:
+            template:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+    
+    # Disallow privileged containers
+    - name: disallow-privileged
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+      validate:
+        message: "Privileged containers are not allowed"
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                - securityContext:
+                    privileged: false
+    
+    # Require resource limits
+    - name: require-resource-limits
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+      validate:
+        message: "All containers must have CPU and memory limits defined"
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                - resources:
+                    limits:
+                      memory: "?*"
+                      cpu: "?*"
+    
+    # Drop ALL capabilities
+    - name: drop-all-capabilities
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+      validate:
+        message: "Containers must drop ALL capabilities"
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                - securityContext:
+                    capabilities:
+                      drop:
+                      - ALL
+    
+    # Disallow privilege escalation
+    - name: disallow-privilege-escalation
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+      validate:
+        message: "Privilege escalation is not allowed"
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                - securityContext:
+                    allowPrivilegeEscalation: false
+    
+    # Require readOnlyRootFilesystem
+    - name: read-only-root-filesystem
+      match:
+        any:
+        - resources:
+            kinds:
+              - Deployment
+              - StatefulSet
+              - DaemonSet
+            namespaces:
+              - production
+      validate:
+        message: "Root filesystem must be read-only in production"
+        pattern:
+          spec:
+            template:
+              spec:
+                containers:
+                - securityContext:
+                    readOnlyRootFilesystem: true

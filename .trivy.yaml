@@ -1,0 +1,44 @@
+# Trivy Configuration File
+# Documentation: https://aquasecurity.github.io/trivy/latest/docs/configuration/
+
+# Scan settings
+severity: CRITICAL,HIGH,MEDIUM,LOW
+vuln-type: os,library
+
+# Exit code
+exit-code: 0  # Don't fail on findings (handled by pipeline)
+
+# Cache settings
+cache-dir: .trivycache/
+
+# Timeout
+timeout: 10m
+
+# Output settings
+format: json
+
+# Skip files/directories
+skip-files:
+  - "**/*.md"
+  - "**/node_modules/**"
+  - "**/test/**"
+  - "**/.git/**"
+
+# Skip directories
+skip-dirs:
+  - node_modules
+  - .git
+  - .github
+  - docs
+
+# Ignore unfixed vulnerabilities (optional)
+# ignore-unfixed: true
+
+# Offline mode (when using local DB)
+# offline-scan: false
+
+# Security checks
+security-checks: vuln,config,secret
+
+# Secret scanning patterns (customize as needed)
+secret-config: .trivy-secret.yaml

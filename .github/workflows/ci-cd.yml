@@ -1,0 +1,607 @@
+name: CI/CD Pipeline - FreshBonds
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'apps/*/templates/**'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'apps/*/templates/**'
+      - 'Dockerfile'
+
+permissions:
+  contents: write          # Required for pushing manifest updates
+  security-events: write   # Required for SARIF uploads
+  packages: read
+  pull-requests: write     # For PR comments
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  # ==========================================
+  # STAGE 1: Detect Changes
+  # ==========================================
+  detect-changes:
+    name: 🔍 Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Services
+        id: detect
+        run: |
+          # Get changed files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+          
+          echo "📝 Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+          
+          # Initialize services array
+          SERVICES=()
+          
+          # Check each service directory
+          if echo "$CHANGED_FILES" | grep -q "^src/frontend/"; then
+            SERVICES+=("frontend")
+            echo "✅ Detected: frontend"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/api-gateway/"; then
+            SERVICES+=("api-gateway")
+            echo "✅ Detected: api-gateway"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/user-service/"; then
+            SERVICES+=("user-service")
+            echo "✅ Detected: user-service"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/product-service/"; then
+            SERVICES+=("product-service")
+            echo "✅ Detected: product-service"
+          fi
+          
+          # If workflow or Dockerfile changed, rebuild all
+          if echo "$CHANGED_FILES" | grep -qE "^(\.github/workflows/|Dockerfile)"; then
+            echo "⚠️ Workflow or Dockerfile changed - rebuilding all services"
+            SERVICES=("frontend" "api-gateway" "user-service" "product-service")
+          fi
+          
+          # Create JSON array
+          if [[ ${#SERVICES[@]} -eq 0 ]]; then
+            echo "ℹ️ No services to build"
+            SERVICES_JSON="[]"
+            HAS_CHANGES="false"
+          else
+            SERVICES_JSON="["
+            for i in "${!SERVICES[@]}"; do
+              if [[ $i -gt 0 ]]; then
+                SERVICES_JSON+=","
+              fi
+              SERVICES_JSON+="\"${SERVICES[$i]}\""
+            done
+            SERVICES_JSON+="]"
+            HAS_CHANGES="true"
+          fi
+          
+          echo ""
+          echo "🎯 Services to build: ${SERVICES[*]}"
+          echo "📊 JSON matrix: $SERVICES_JSON"
+          
+          # Validate JSON
+          if ! echo "$SERVICES_JSON" | jq empty >/dev/null 2>&1; then
+            echo "❌ Invalid JSON, using fallback"
+            SERVICES_JSON='[]'
+            HAS_CHANGES="false"
+          fi
+          
+          echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
+          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+
+  # ==========================================
+  # STAGE 2: Security Policy Checks
+  # ==========================================
+  policy-checks:
+    name: 🔐 Security Policy Validation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run OPA Policy Tests
+        if: hashFiles('policies/opa/**') != ''
+        run: |
+          echo "🔍 Running OPA policy tests..."
+          
+          # Install Conftest
+          CONFTEST_VERSION=0.49.1
+          curl -L -o conftest.tar.gz https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz
+          tar xzf conftest.tar.gz
+          sudo mv conftest /usr/local/bin/
+          rm conftest.tar.gz
+          
+          # Test Kubernetes manifests
+          if [[ -d "clusters" ]]; then
+            echo "Testing Kubernetes manifests..."
+            conftest test --policy ./policies/opa clusters/**/*.yaml || echo "⚠️ Some policies failed"
+          fi
+
+      - name: Run Kyverno Policy Tests
+        if: hashFiles('policies/kyverno/**') != ''
+        run: |
+          echo "🔍 Running Kyverno policy tests..."
+          
+          # Install Kyverno CLI
+          curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          tar -xzf kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          sudo mv kyverno /usr/local/bin/
+          rm kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          
+          # Test policies
+          if [[ -d "policies/kyverno" ]]; then
+            echo "Testing Kyverno policies..."
+            kyverno apply policies/kyverno/*.yaml --resource clusters/**/*.yaml || echo "⚠️ Some policies failed"
+          fi
+
+      - name: Run Checkov (IaC Security Scanning)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: kubernetes,terraform,dockerfile
+          soft_fail: false
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          skip_check: CKV_K8S_43  # Image tag latest (handled by our workflow)
+
+      - name: Upload Checkov Results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov-iac
+
+  # ==========================================
+  # STAGE 3: Build, Test, Scan, Push
+  # ==========================================
+  build-and-scan:
+    name: 🏗️ Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, policy-checks]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_changes == 'true' &&
+      (needs.policy-checks.result == 'success' || needs.policy-checks.result == 'skipped')
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate Image Tags
+        id: tags
+        run: |
+          SERVICE="${{ matrix.service }}"
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          # Image name
+          IMAGE_NAME="${{ env.IMAGE_PREFIX }}/${SERVICE}"
+          
+          # Tags
+          TAG_SHA="${SHORT_SHA}"
+          TAG_LATEST="latest"
+          TAG_TIMESTAMP="${TIMESTAMP}-${SHORT_SHA}"
+          
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "tag_sha=${TAG_SHA}" >> $GITHUB_OUTPUT
+          echo "tag_latest=${TAG_LATEST}" >> $GITHUB_OUTPUT
+          echo "tag_timestamp=${TAG_TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "full_image=${IMAGE_NAME}:${TAG_SHA}" >> $GITHUB_OUTPUT
+          
+          echo "📦 Image: ${IMAGE_NAME}"
+          echo "🏷️ Tags: ${TAG_SHA}, ${TAG_LATEST}, ${TAG_TIMESTAMP}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: src/${{ matrix.service }}/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd src/${{ matrix.service }}
+          if [[ -f package-lock.json ]]; then
+            npm ci --prefer-offline --no-audit
+          else
+            npm install --no-audit
+          fi
+
+      - name: Run Tests
+        run: |
+          cd src/${{ matrix.service }}
+          if npm run | grep -q "test"; then
+            npm test || echo "⚠️ Tests failed but continuing"
+          else
+            echo "ℹ️ No tests defined"
+          fi
+
+      - name: Build Docker Image
+        run: |
+          cd src/${{ matrix.service }}
+          docker build \
+            -t ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_sha }} \
+            -t ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_latest }} \
+            -t ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_timestamp }} \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            .
+
+      - name: Run Trivy Vulnerability Scan (JSON)
+        run: |
+          echo "🔍 Running Trivy vulnerability scan..."
+          
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$(pwd):/workspace" \
+            aquasec/trivy:latest image \
+            --format json \
+            --output /workspace/trivy-results-${{ matrix.service }}.json \
+            --severity CRITICAL,HIGH,MEDIUM,LOW \
+            --vuln-type os,library \
+            --no-progress \
+            --timeout 10m \
+            ${{ steps.tags.outputs.full_image }}
+        continue-on-error: true
+
+      - name: Run Trivy Vulnerability Scan (Table)
+        run: |
+          echo "📋 Vulnerability Summary:"
+          
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --vuln-type os,library \
+            --no-progress \
+            ${{ steps.tags.outputs.full_image }} || echo "ℹ️ No critical/high vulnerabilities in table view"
+        continue-on-error: true
+
+      - name: Analyze Trivy Results
+        id: trivy-analysis
+        run: |
+          RESULTS_FILE="trivy-results-${{ matrix.service }}.json"
+          
+          if [[ ! -f "$RESULTS_FILE" ]] || [[ ! -s "$RESULTS_FILE" ]]; then
+            echo "⚠️ Trivy results file not found or empty"
+            echo "vulnerability_check=failed" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          HIGH=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          MEDIUM=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          LOW=$(jq -r '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          
+          echo ""
+          echo "🔍 Security Scan Results for ${{ matrix.service }}:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "   🔴 CRITICAL: $CRITICAL"
+          echo "   🟠 HIGH:     $HIGH"
+          echo "   🟡 MEDIUM:   $MEDIUM"
+          echo "   🔵 LOW:      $LOW"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          # Show detailed vulnerabilities
+          if [[ $CRITICAL -gt 0 ]]; then
+            echo "🔴 CRITICAL Vulnerabilities:"
+            jq -r '
+              [.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] |
+              sort_by(.CVSS.nvd.V3Score // 0) | reverse |
+              .[] |
+              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+              "📌 " + .VulnerabilityID + " - " + .PkgName + "\n" +
+              "   Title: " + (.Title // "N/A") + "\n" +
+              "   Installed: " + (.InstalledVersion // "N/A") + " → Fixed: " + (.FixedVersion // "No fix available") + "\n" +
+              "   CVSS Score: " + ((.CVSS.nvd.V3Score // .CVSS.nvd.V2Score // 0) | tostring) + "\n" +
+              "   References: " + ((.References[0] // "N/A") | tostring)
+            ' "$RESULTS_FILE" 2>/dev/null | head -50
+            echo ""
+          fi
+          
+          if [[ $HIGH -gt 0 ]] && [[ $HIGH -le 10 ]]; then
+            echo "🟠 HIGH Vulnerabilities:"
+            jq -r '
+              [.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] |
+              sort_by(.CVSS.nvd.V3Score // 0) | reverse |
+              .[] |
+              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+              "📌 " + .VulnerabilityID + " - " + .PkgName + "\n" +
+              "   Installed: " + (.InstalledVersion // "N/A") + " → Fixed: " + (.FixedVersion // "No fix available")
+            ' "$RESULTS_FILE" 2>/dev/null | head -30
+            echo ""
+          elif [[ $HIGH -gt 10 ]]; then
+            echo "🟠 HIGH Vulnerabilities: Showing top 5 (total: $HIGH)"
+            jq -r '
+              [.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] |
+              sort_by(.CVSS.nvd.V3Score // 0) | reverse |
+              .[0:5] |
+              .[] |
+              "  • " + .VulnerabilityID + " (" + .PkgName + ")"
+            ' "$RESULTS_FILE" 2>/dev/null
+            echo ""
+          fi
+          
+          # Remediation guidance
+          if [[ $CRITICAL -gt 0 ]] || [[ $HIGH -gt 0 ]]; then
+            echo "🛠️ Remediation Steps:"
+            echo "1. Update base image to latest version"
+            echo "2. Update affected packages:"
+            jq -r '
+              [.Results[]?.Vulnerabilities[]? | 
+               select(.Severity=="CRITICAL" or .Severity=="HIGH") | 
+               .PkgName] | 
+              unique | 
+              .[] | 
+              "   - " + .
+            ' "$RESULTS_FILE" 2>/dev/null | head -10
+            echo "3. Review Dockerfile for outdated dependencies"
+            echo ""
+          fi
+          
+          # Set output for later steps
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          
+          # Fail on CRITICAL vulnerabilities
+          if [[ $CRITICAL -gt 0 ]]; then
+            echo "❌ BUILD FAILED: $CRITICAL critical vulnerabilities found"
+            echo "::error::Critical vulnerabilities detected in ${{ matrix.service }}"
+            echo "vulnerability_check=failed" >> $GITHUB_OUTPUT
+            exit 1
+          elif [[ $HIGH -gt 0 ]]; then
+            echo "❌ BUILD FAILED: $HIGH high-severity vulnerabilities found"
+            echo "::error::High-severity vulnerabilities detected in ${{ matrix.service }}"
+            echo "vulnerability_check=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ Security scan passed - no critical or high vulnerabilities"
+            echo "vulnerability_check=passed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Trivy Results as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-${{ matrix.service }}
+          path: trivy-results-${{ matrix.service }}.json
+          retention-days: 30
+
+      - name: Push to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "🚀 Pushing images to Docker Hub..."
+          docker push ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_sha }}
+          docker push ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_latest }}
+          docker push ${{ steps.tags.outputs.image_name }}:${{ steps.tags.outputs.tag_timestamp }}
+          echo "✅ Images pushed successfully"
+
+      - name: Generate Security Summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔐 Security Scan Results: ${{ matrix.service }}
+          
+          | Severity | Count |
+          |----------|-------|
+          | 🔴 Critical | ${{ steps.trivy-analysis.outputs.critical || '0' }} |
+          | 🟠 High | ${{ steps.trivy-analysis.outputs.high || '0' }} |
+          | 🟡 Medium | ${{ steps.trivy-analysis.outputs.medium || '0' }} |
+          
+          **Image:** \`${{ steps.tags.outputs.full_image }}\`
+          **Status:** ${{ steps.trivy-analysis.outputs.vulnerability_check }}
+          
+          EOF
+
+  # ==========================================
+  # STAGE 4: Update Manifests
+  # ==========================================
+  update-manifests:
+    name: 📝 Update ArgoCD Manifests
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-scan]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-and-scan.result == 'success' &&
+      needs.detect-changes.outputs.has_changes == 'true'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update Image Tags in Values Files
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          SERVICES='${{ needs.detect-changes.outputs.services }}'
+          
+          echo "🔄 Updating manifests for services: $SERVICES"
+          echo "📝 New image tag: $SHORT_SHA"
+          echo ""
+          
+          # Parse services JSON
+          SERVICES_ARRAY=$(echo "$SERVICES" | jq -r '.[]')
+          
+          for SERVICE in $SERVICES_ARRAY; do
+            VALUES_FILE="apps/freshbonds/values.yaml"
+            
+            if [[ ! -f "$VALUES_FILE" ]]; then
+              echo "⚠️ Values file not found: $VALUES_FILE"
+              continue
+            fi
+            
+            echo "📝 Updating $SERVICE in $VALUES_FILE..."
+            
+            # Update image tag in values file
+            # Looking for patterns like:
+            # frontend:
+            #   image:
+            #     tag: "abc123"
+            
+            if grep -q "^${SERVICE}:" "$VALUES_FILE"; then
+              # Use sed to update the tag under the service section
+              sed -i.bak "/^${SERVICE}:/,/^[a-zA-Z]/ s/tag: \".*\"/tag: \"${SHORT_SHA}\"/" "$VALUES_FILE"
+              rm -f "${VALUES_FILE}.bak"
+              echo "✅ Updated ${SERVICE} image tag to ${SHORT_SHA}"
+            else
+              echo "⚠️ Service ${SERVICE} not found in ${VALUES_FILE}"
+            fi
+          done
+          
+          echo ""
+          echo "📋 Changed files:"
+          git diff --name-only
+
+      - name: Commit and Push Changes
+        run: |
+          if git diff --quiet; then
+            echo "ℹ️ No changes to commit"
+            exit 0
+          fi
+          
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          SERVICES='${{ needs.detect-changes.outputs.services }}'
+          
+          git add apps/freshbonds/values.yaml
+          git commit -m "chore: update image tags to ${SHORT_SHA} [skip ci]
+
+          Updated services: ${SERVICES}
+          
+          Triggered by: ${{ github.actor }}
+          Commit: ${{ github.sha }}"
+          
+          git push origin main
+          
+          echo "✅ Manifests updated and pushed to repository"
+          echo "🚀 ArgoCD will detect changes and deploy automatically"
+
+  # ==========================================
+  # STAGE 5: Notify
+  # ==========================================
+  notify:
+    name: 📢 Send Notifications
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-scan, update-manifests]
+    if: always() && needs.detect-changes.outputs.has_changes == 'true'
+    
+    steps:
+      - name: Determine Status
+        id: status
+        run: |
+          if [[ "${{ needs.build-and-scan.result }}" == "success" ]] && [[ "${{ needs.update-manifests.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "message=Pipeline completed successfully" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.build-and-scan.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "message=Build or security scan failed" >> $GITHUB_OUTPUT
+          else
+            echo "status=partial" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "message=Pipeline completed with warnings" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # ${{ steps.status.outputs.emoji }} Pipeline Summary
+          
+          **Status:** ${{ steps.status.outputs.message }}
+          **Services Built:** ${{ needs.detect-changes.outputs.services }}
+          **Commit:** ${{ github.sha }}
+          **Triggered by:** ${{ github.actor }}
+          
+          ## Stage Results
+          - Detect Changes: ✅ Success
+          - Build & Scan: ${{ needs.build-and-scan.result == 'success' && '✅ Success' || '❌ Failed' }}
+          - Update Manifests: ${{ needs.update-manifests.result == 'success' && '✅ Success' || '⚠️ Skipped/Failed' }}
+          
+          ## Next Steps
+          ${{ needs.update-manifests.result == 'success' && '🚀 ArgoCD will automatically detect and deploy the changes' || '⚠️ Manual intervention may be required' }}
+          EOF
+
+      # Optional: Send to PagerDuty on failures
+      - name: Send PagerDuty Alert
+        if: needs.build-and-scan.result == 'failure' && secrets.PAGERDUTY_INTEGRATION_KEY != ''
+        run: |
+          curl -X POST https://events.pagerduty.com/v2/enqueue \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "routing_key": "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}",
+              "event_action": "trigger",
+              "payload": {
+                "summary": "CI/CD Pipeline Failed - FreshBonds",
+                "severity": "error",
+                "source": "GitHub Actions",
+                "custom_details": {
+                  "repository": "${{ github.repository }}",
+                  "commit": "${{ github.sha }}",
+                  "actor": "${{ github.actor }}",
+                  "services": ${{ needs.detect-changes.outputs.services }},
+                  "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            }'

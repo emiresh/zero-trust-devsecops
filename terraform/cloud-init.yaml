@@ -1,0 +1,203 @@
+#cloud-config
+
+# Cloud-init configuration for Oracle Cloud ARM instance
+# Optimized for Kubernetes/K3s deployment
+
+hostname: ${hostname}
+fqdn: ${hostname}.local
+manage_etc_hosts: true
+
+# Package updates
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - jq
+  - tmux
+
+write_files:
+  # Kubernetes sysctl settings
+  - path: /etc/sysctl.d/99-kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables = 1
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      fs.inotify.max_user_watches = 524288
+      fs.inotify.max_user_instances = 512
+    permissions: '0644'
+  
+  # Disable swap permanently
+  - path: /etc/systemd/system/disable-swap.service
+    content: |
+      [Unit]
+      Description=Disable Swap
+      After=local-fs.target
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/sbin/swapoff -a
+      RemainAfterExit=yes
+      
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+  
+  # Fail2ban jail for SSH
+  - path: /etc/fail2ban/jail.local
+    content: |
+      [sshd]
+      enabled = true
+      port = 22
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+    permissions: '0644'
+
+  # UFW rules
+  - path: /etc/ufw/applications.d/kubernetes
+    content: |
+      [Kubernetes]
+      title=Kubernetes
+      description=Kubernetes API Server and NodePorts
+      ports=6443,2379:2380,10250,10251,10252,30000:32767/tcp
+    permissions: '0644'
+
+runcmd:
+  # System configuration
+  - echo "⚙️ Configuring system..."
+  - sysctl --system
+  - swapoff -a
+  - sed -i '/ swap / s/^/#/' /etc/fstab
+  - systemctl enable disable-swap.service
+  - systemctl start disable-swap.service
+  
+  # Firewall configuration
+  - echo "🔥 Configuring firewall..."
+  - ufw --force enable
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp    # SSH
+  - ufw allow 80/tcp    # HTTP
+  - ufw allow 443/tcp   # HTTPS
+  - ufw allow 6443/tcp  # Kubernetes API
+  - ufw allow 30000:32767/tcp  # NodePorts
+  - ufw reload
+  
+  # Fail2ban
+  - echo "🛡️ Enabling Fail2ban..."
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+  
+  # Automatic security updates
+  - echo "🔄 Configuring automatic security updates..."
+  - echo 'APT::Periodic::Update-Package-Lists "1";' > /etc/apt/apt.conf.d/20auto-upgrades
+  - echo 'APT::Periodic::Unattended-Upgrade "1";' >> /etc/apt/apt.conf.d/20auto-upgrades
+  - echo 'APT::Periodic::AutocleanInterval "7";' >> /etc/apt/apt.conf.d/20auto-upgrades
+  
+  %{ if install_docker }
+  # Install Docker
+  - echo "🐳 Installing Docker..."
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker ubuntu
+  %{ endif }
+  
+  %{ if install_k3s }
+  # Install K3s
+  - echo "☸️ Installing K3s..."
+  - curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+  - mkdir -p /home/ubuntu/.kube
+  - cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+  - chown -R ubuntu:ubuntu /home/ubuntu/.kube
+  - chmod 600 /home/ubuntu/.kube/config
+  %{ endif }
+  
+  %{ if install_monitoring }
+  # Install monitoring tools
+  - echo "📊 Installing monitoring tools..."
+  - apt-get install -y prometheus-node-exporter
+  - systemctl enable prometheus-node-exporter
+  - systemctl start prometheus-node-exporter
+  %{ endif }
+  
+  # Create motd
+  - echo "📋 Creating MOTD..."
+  - |
+    cat > /etc/motd << 'MOTD'
+    ╔═══════════════════════════════════════════════════════════╗
+    ║           FreshBonds Kubernetes Node                      ║
+    ║  Managed by Terraform | ArgoCD GitOps                     ║
+    ╚═══════════════════════════════════════════════════════════╝
+    
+    System Information:
+    - Hostname: ${hostname}
+    %{ if install_k3s }- Kubernetes: K3s installed%{ endif }
+    %{ if install_docker }- Docker: Installed%{ endif }
+    
+    Useful Commands:
+    %{ if install_k3s }- kubectl get nodes
+    - kubectl get pods -A
+    - sudo systemctl status k3s%{ endif }
+    %{ if install_docker }- docker ps
+    - docker images%{ endif }
+    - sudo ufw status
+    - sudo fail2ban-client status
+    
+    Documentation: https://github.com/emiresh/argo
+    MOTD
+  
+  # Final cleanup
+  - echo "🧹 Cleaning up..."
+  - apt-get autoremove -y
+  - apt-get autoclean -y
+  
+  # Create completion marker
+  - touch /var/log/cloud-init-complete
+  - echo "✅ Cloud-init configuration complete!"
+
+# Timezone
+timezone: UTC
+
+# User configuration
+users:
+  - default
+  - name: ubuntu
+    groups: sudo, docker
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+# SSH configuration
+ssh_pwauth: false
+disable_root: true
+
+# Reboot if kernel updated
+power_state:
+  mode: reboot
+  condition: test -f /var/run/reboot-required
+
+# Final message
+final_message: |
+  ╔═══════════════════════════════════════════════════════════╗
+  ║  Cloud-init finished after $UPTIME seconds                ║
+  ║  Instance is ready for use!                               ║
+  ╚═══════════════════════════════════════════════════════════╝
