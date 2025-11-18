@@ -128,6 +128,11 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     
+    permissions:
+      contents: read
+      security-events: write  # Required for uploading SARIF files
+      actions: read           # Required for workflow run API access
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
