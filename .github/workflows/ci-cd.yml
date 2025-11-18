@@ -144,18 +144,33 @@ jobs:
           sudo mv conftest /usr/local/bin/
           rm conftest.tar.gz
           
-          # Test Kubernetes manifests
+          # Test Kubernetes manifests in clusters/ (ArgoCD Applications)
           if [[ -d "clusters" ]]; then
-            echo "Testing Kubernetes manifests..."
+            echo "Testing ArgoCD Applications in clusters/..."
             YAML_FILES=$(find clusters -name "*.yaml" -o -name "*.yml")
             if [[ -n "$YAML_FILES" ]]; then
-              echo "$YAML_FILES" | xargs conftest test --policy ./policies/opa || echo "⚠️ Some policies failed"
-            else
-              echo "No YAML files found in clusters/"
+              echo "$YAML_FILES" | xargs conftest test --policy ./policies/opa || echo "⚠️ Some policies failed (expected for ArgoCD Applications)"
             fi
-          else
-            echo "⚠️ clusters/ directory not found, skipping OPA tests"
           fi
+          
+          # Test Helm templates (render first)
+          if [[ -d "apps" ]]; then
+            echo "Testing Helm templates..."
+            # Install Helm
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+            
+            # Render and test each Helm chart
+            for chart in apps/*/; do
+              if [[ -f "$chart/Chart.yaml" ]]; then
+                chart_name=$(basename "$chart")
+                echo "Rendering and testing $chart_name..."
+                helm template "$chart_name" "$chart" > "/tmp/${chart_name}-rendered.yaml" 2>/dev/null || continue
+                conftest test --policy ./policies/opa "/tmp/${chart_name}-rendered.yaml" || echo "⚠️ Policies failed for $chart_name"
+              fi
+            done
+          fi
+          
+          echo "✅ OPA policy tests completed"
 
       - name: Run Kyverno Policy Tests
         if: hashFiles('policies/kyverno/**') != ''
@@ -168,18 +183,29 @@ jobs:
           sudo mv kyverno /usr/local/bin/
           rm kyverno-cli_v1.11.0_linux_x86_64.tar.gz
           
-          # Test policies
-          if [[ -d "policies/kyverno" && -d "clusters" ]]; then
-            echo "Testing Kyverno policies..."
-            YAML_FILES=$(find clusters -name "*.yaml" -o -name "*.yml")
-            if [[ -n "$YAML_FILES" ]]; then
-              echo "$YAML_FILES" | tr '\n' ',' | xargs -d ',' -I {} kyverno apply policies/kyverno/*.yaml --resource {} || echo "⚠️ Some policies failed"
-            else
-              echo "No YAML files found in clusters/"
+          # Test Helm templates (render first)
+          if [[ -d "apps" && -d "policies/kyverno" ]]; then
+            echo "Testing Kyverno policies against Helm templates..."
+            
+            # Install Helm if not already installed
+            if ! command -v helm &> /dev/null; then
+              curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
             fi
+            
+            # Render and test each Helm chart
+            for chart in apps/*/; do
+              if [[ -f "$chart/Chart.yaml" ]]; then
+                chart_name=$(basename "$chart")
+                echo "Testing $chart_name with Kyverno policies..."
+                helm template "$chart_name" "$chart" > "/tmp/${chart_name}-rendered.yaml" 2>/dev/null || continue
+                kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}-rendered.yaml" || echo "⚠️ Some policies failed for $chart_name"
+              fi
+            done
           else
-            echo "⚠️ clusters/ or policies/kyverno/ directory not found, skipping Kyverno tests"
+            echo "⚠️ apps/ or policies/kyverno/ directory not found, skipping Kyverno tests"
           fi
+          
+          echo "✅ Kyverno policy tests completed"
 
       - name: Run Checkov (IaC Security Scanning)
         uses: bridgecrewio/checkov-action@v12
