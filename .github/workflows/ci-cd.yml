@@ -8,7 +8,6 @@ on:
       - 'src/**'
       - 'apps/*/templates/**'
       - 'Dockerfile'
-      - '.github/workflows/**'
   pull_request:
     branches:
       - main
