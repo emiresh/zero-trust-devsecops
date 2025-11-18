@@ -139,7 +139,7 @@ jobs:
           echo ""
           
           # Install Conftest
-          CONFTEST_VERSION=0.49.1
+          CONFTEST_VERSION=0.63.0
           curl -sL https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz | tar xz
           sudo mv conftest /usr/local/bin/
           
