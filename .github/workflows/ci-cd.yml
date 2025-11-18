@@ -269,7 +269,7 @@ jobs:
             --skip-check CKV_K8S_43,CKV_K8S_35 \
             --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
             --output cli \
-            --compact --quiet \
+            --compact \
             2>&1 | tee /tmp/checkov-output.txt
           
           # Generate SARIF file separately for upload
@@ -284,11 +284,19 @@ jobs:
           # Store exit code
           CHECKOV_EXIT=$?
           
-          # Parse summary line
-          SUMMARY=$(grep -E "Passed checks:|Failed checks:|Skipped checks:" /tmp/checkov-output.txt | tail -3)
-          PASSED=$(echo "$SUMMARY" | grep "Passed checks:" | grep -oP '\d+' | head -1 || echo "0")
-          FAILED=$(echo "$SUMMARY" | grep "Failed checks:" | grep -oP '\d+' | head -1 || echo "0")
-          SKIPPED=$(echo "$SUMMARY" | grep "Skipped checks:" | grep -oP '\d+' | head -1 || echo "0")
+          # Parse the summary line - Checkov outputs like "Passed checks: 266, Failed checks: 3, Skipped checks: 0"
+          SUMMARY=$(grep -E "^(kubernetes|terraform|dockerfile) scan results:" -A 2 /tmp/checkov-output.txt | tail -1)
+          
+          # Extract numbers - looking for pattern "Passed checks: X, Failed checks: Y, Skipped checks: Z"
+          PASSED=$(echo "$SUMMARY" | grep -oP 'Passed checks:\s*\K\d+' || echo "0")
+          FAILED=$(echo "$SUMMARY" | grep -oP 'Failed checks:\s*\K\d+' || echo "0")
+          SKIPPED=$(echo "$SUMMARY" | grep -oP 'Skipped checks:\s*\K\d+' || echo "0")
+          
+          # Fallback: if parsing failed, try to count from full output
+          if [ "$PASSED" = "0" ] && [ "$FAILED" = "0" ]; then
+            PASSED=$(grep -c "Check: CKV" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+            FAILED=$(grep -c "FAILED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+          fi
           
           # Output for next step
           echo "CHECKOV_PASSED=$PASSED" >> $GITHUB_OUTPUT
