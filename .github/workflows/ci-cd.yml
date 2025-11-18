@@ -240,9 +240,22 @@ jobs:
                   # Add detailed warnings and failures to summary
                   if [[ $WARNINGS -gt 0 ]] || [[ $FAILURES -gt 0 ]]; then
                     echo "### 📋 Detailed Results" >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
-                    grep -E "^(WARN|FAIL) -" /tmp/opa-helm.txt | sed 's/- \/tmp\/.*\.yaml - main - /: /' >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    
+                    if [[ $WARNINGS -gt 0 ]]; then
+                      echo "#### ⚠️ Warnings ($WARNINGS)" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                      grep "^WARN" /tmp/opa-helm.txt | sed 's/^WARN - \/tmp\/[^/]*-rendered\.yaml - main - //' >> $GITHUB_STEP_SUMMARY || echo "No warnings found" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                    fi
+                    
+                    if [[ $FAILURES -gt 0 ]]; then
+                      echo "#### ❌ Failures ($FAILURES)" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                      grep "^FAIL" /tmp/opa-helm.txt | sed 's/^FAIL - \/tmp\/[^/]*-rendered\.yaml - main - //' >> $GITHUB_STEP_SUMMARY || echo "No failures found" >> $GITHUB_STEP_SUMMARY
+                      echo '```' >> $GITHUB_STEP_SUMMARY
+                    fi
                   fi
                   
                   if [[ $FAILURES -gt 0 ]]; then
