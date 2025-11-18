@@ -10,6 +10,7 @@ spec:
     metadata:
       labels:
         app: db-init
+        job: freshbonds-db-init
     spec:
       restartPolicy: OnFailure
       automountServiceAccountToken: false
@@ -117,4 +118,39 @@ spec:
           emptyDir: {}
         - name: app-cache
           emptyDir: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-init-job-netpol
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      job: freshbonds-db-init
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow MongoDB connection
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 27017
+    # Allow external MongoDB (if using managed service)
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 27017
 

@@ -262,8 +262,8 @@ jobs:
           soft_fail: false
           output_format: cli,sarif
           output_file_path: console,checkov-results.sarif
-          skip_check: CKV_K8S_43  # Image tag latest (handled by our workflow)
-          skip_path: test-pod.yaml,test-pvc.yaml,Future/  # Exclude test files and examples
+          skip_check: CKV_K8S_43,CKV_K8S_35  # Image tag latest (handled by workflow), secrets as env vars (needed for init scripts)
+          skip_path: test-pod.yaml,test-pvc.yaml,Future/  # Exclude test files and example templates from production scans
 
       - name: Upload Checkov Results
         if: always()

@@ -38,4 +38,8 @@ USER appuser
 
 EXPOSE 3000
 
+# Add healthcheck to verify nginx is responding
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
+
 CMD ["nginx", "-g", "daemon off;"]
