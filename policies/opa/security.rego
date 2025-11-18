@@ -1,4 +1,4 @@
-package kubernetes.security
+package main
 
 # Deny containers running as root
 deny[msg] {

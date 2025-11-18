@@ -1,4 +1,4 @@
-package kubernetes.network
+package main
 
 # Require NetworkPolicy for each namespace
 deny[msg] {
