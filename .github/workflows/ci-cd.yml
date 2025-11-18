@@ -197,14 +197,23 @@ jobs:
                   echo "🔍 Running OPA policy validation..."
                   echo ""
                   
-                  # Run conftest and capture output
-                  conftest test --policy ./policies/opa "/tmp/${chart_name}-rendered.yaml" > /tmp/opa-helm.txt 2>&1 || true
+                  # Run conftest and capture output with full details
+                  if conftest test --policy ./policies/opa "/tmp/${chart_name}-rendered.yaml" > /tmp/opa-helm.txt 2>&1; then
+                    VALIDATION_PASSED=true
+                  else
+                    VALIDATION_PASSED=false
+                  fi
                   
-                  # Parse summary
-                  TESTS=$(grep -oP '\d+(?= tests)' /tmp/opa-helm.txt | tail -1 || echo "0")
-                  PASSED=$(grep -oP '\d+(?= passed)' /tmp/opa-helm.txt | tail -1 || echo "0")
-                  WARNINGS=$(grep -oP '\d+(?= warnings)' /tmp/opa-helm.txt | tail -1 || echo "0")
-                  FAILURES=$(grep -oP '\d+(?= failures)' /tmp/opa-helm.txt | tail -1 || echo "0")
+                  # Display full output for debugging
+                  cat /tmp/opa-helm.txt
+                  echo ""
+                  
+                  # Parse summary from last line
+                  SUMMARY=$(tail -1 /tmp/opa-helm.txt)
+                  TESTS=$(echo "$SUMMARY" | grep -oP '\d+(?= tests)' || echo "0")
+                  PASSED=$(echo "$SUMMARY" | grep -oP '\d+(?= passed)' || echo "0")
+                  WARNINGS=$(echo "$SUMMARY" | grep -oP '\d+(?= warnings)' || echo "0")
+                  FAILURES=$(echo "$SUMMARY" | grep -oP '\d+(?= failures)' || echo "0")
                   
                   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                   echo "  📊 Policy Validation Summary"
@@ -214,27 +223,6 @@ jobs:
                   printf "   %-15s %s\n" "⚠️  Warnings:" "$WARNINGS"
                   printf "   %-15s %s\n" "❌ Failures:" "$FAILURES"
                   echo ""
-                  
-                  # Show warnings if any
-                  if [[ $WARNINGS -gt 0 ]]; then
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "  ⚠️  WARNINGS (Best Practices)"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo ""
-                    grep "WARN -" /tmp/opa-helm.txt | sed 's/WARN - \/tmp\/.*\.yaml - main - /  • /' || true
-                    echo ""
-                  fi
-                  
-                  # Show failures if any
-                  if [[ $FAILURES -gt 0 ]]; then
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "  ❌ FAILURES (Security Violations)"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo ""
-                    grep "FAIL -" /tmp/opa-helm.txt | sed 's/FAIL - \/tmp\/.*\.yaml - main - /  • /' || true
-                    echo ""
-                    echo "⚠️  Security violations detected! These should be fixed before production."
-                  fi
                   
                   # Create GitHub Step Summary
                   cat >> $GITHUB_STEP_SUMMARY << EOF
@@ -249,19 +237,17 @@ jobs:
           
           EOF
                   
-                  if [[ $WARNINGS -gt 0 ]]; then
-                    echo "### ⚠️ Warnings" >> $GITHUB_STEP_SUMMARY
+                  # Add detailed warnings and failures to summary
+                  if [[ $WARNINGS -gt 0 ]] || [[ $FAILURES -gt 0 ]]; then
+                    echo "### 📋 Detailed Results" >> $GITHUB_STEP_SUMMARY
                     echo '```' >> $GITHUB_STEP_SUMMARY
-                    grep "WARN -" /tmp/opa-helm.txt | sed 's/WARN - \/tmp\/.*\.yaml - main - //' >> $GITHUB_STEP_SUMMARY
+                    grep -E "^(WARN|FAIL) -" /tmp/opa-helm.txt | sed 's/- \/tmp\/.*\.yaml - main - /: /' >> $GITHUB_STEP_SUMMARY
                     echo '```' >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
                   fi
                   
                   if [[ $FAILURES -gt 0 ]]; then
-                    echo "### ❌ Failures" >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
-                    grep "FAIL -" /tmp/opa-helm.txt | sed 's/FAIL - \/tmp\/.*\.yaml - main - //' >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
+                    echo ""
+                    echo "⚠️  Security violations detected! These should be fixed before production."
                   fi
                   
                 else
