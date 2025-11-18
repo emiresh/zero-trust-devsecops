@@ -18,9 +18,15 @@ spec:
         app: {{ .name }}
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        {{- if .securityContext }}
+        runAsNonRoot: {{ .securityContext.runAsNonRoot | default $.Values.defaults.securityContext.runAsNonRoot }}
+        runAsUser: {{ .securityContext.runAsUser | default $.Values.defaults.securityContext.runAsUser }}
+        fsGroup: {{ .securityContext.fsGroup | default $.Values.defaults.securityContext.fsGroup }}
+        {{- else }}
+        runAsNonRoot: {{ $.Values.defaults.securityContext.runAsNonRoot }}
+        runAsUser: {{ $.Values.defaults.securityContext.runAsUser }}
+        fsGroup: {{ $.Values.defaults.securityContext.fsGroup }}
+        {{- end }}
       containers:
       - name: {{ .name }}
         image: "{{ .image.repository }}:{{ .image.tag }}"
@@ -44,19 +50,33 @@ spec:
         {{- else }}
         resources:
           limits:
-            cpu: "200m"
-            memory: "256Mi"
+            cpu: {{ $.Values.defaults.resources.limits.cpu | default "200m" | quote }}
+            memory: {{ $.Values.defaults.resources.limits.memory | default "256Mi" | quote }}
           requests:
-            cpu: "50m"
-            memory: "64Mi"
+            cpu: {{ $.Values.defaults.resources.requests.cpu | default "50m" | quote }}
+            memory: {{ $.Values.defaults.resources.requests.memory | default "64Mi" | quote }}
         {{- end }}
         securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
+          {{- if .securityContext }}
+          allowPrivilegeEscalation: {{ .securityContext.allowPrivilegeEscalation | default $.Values.defaults.securityContext.allowPrivilegeEscalation }}
+          readOnlyRootFilesystem: {{ .securityContext.readOnlyRootFilesystem | default $.Values.defaults.securityContext.readOnlyRootFilesystem }}
+          runAsNonRoot: {{ .securityContext.runAsNonRoot | default $.Values.defaults.securityContext.runAsNonRoot }}
+          {{- else }}
+          allowPrivilegeEscalation: {{ $.Values.defaults.securityContext.allowPrivilegeEscalation }}
+          readOnlyRootFilesystem: {{ $.Values.defaults.securityContext.readOnlyRootFilesystem }}
+          runAsNonRoot: {{ $.Values.defaults.securityContext.runAsNonRoot }}
+          {{- end }}
           capabilities:
             drop:
-            - ALL
+            {{- if and .securityContext .securityContext.capabilities }}
+            {{- range .securityContext.capabilities.drop }}
+            - {{ . }}
+            {{- end }}
+            {{- else }}
+            {{- range $.Values.defaults.securityContext.capabilities.drop }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
         {{- if .healthCheck }}
         livenessProbe:
           httpGet:
