@@ -70,6 +70,14 @@ deployments:
         value: "http://apigateway-service:8080"
       - name: NODE_ENV
         value: "production"
+    volumes:
+      - name: nginx-cache
+      - name: nginx-run
+    volumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-run
+        mountPath: /var/run
 
   - name: product-service
     replicaCount: 2

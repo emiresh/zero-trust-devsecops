@@ -89,4 +89,18 @@ spec:
           value: {{ .value | quote }}
         {{- end }}
         {{- end }}
+        {{- if .volumeMounts }}
+        volumeMounts:
+        {{- range .volumeMounts }}
+        - name: {{ .name }}
+          mountPath: {{ .mountPath }}
+        {{- end }}
+        {{- end }}
+      {{- if .volumes }}
+      volumes:
+      {{- range .volumes }}
+      - name: {{ .name }}
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
 {{- end }}
