@@ -339,34 +339,276 @@ jobs:
   # ==========================================
   # STAGE 3: Build, Test, Scan, Push
   # ==========================================
-  # COMMENTED OUT FOR TESTING - Uncomment after policy tests work
-  # build-and-scan:
-  #   name: 🏗️ Build ${{ matrix.service }}
-  #   runs-on: ubuntu-latest
-  #   needs: [detect-changes, policy-checks]
-  #   if: |
-  #     always() &&
-  #     needs.detect-changes.outputs.has_changes == 'true' &&
-  #     (needs.policy-checks.result == 'success' || needs.policy-checks.result == 'skipped')
-  #   
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
-  #   
-  #   steps:
-  #     ... (all build steps commented)
-  
+  build-and-scan:
+    name: 🏗️ Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, policy-checks]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_changes == 'true' &&
+      (needs.policy-checks.result == 'success' || needs.policy-checks.result == 'skipped')
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate Image Tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          # Generate semantic version tag
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          else
+            TAG="dev-${SHORT_SHA}"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          
+          echo "📦 Image Tag: $TAG"
+
+      - name: Build Docker Image
+        id: build
+        run: |
+          SERVICE="${{ matrix.service }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
+          
+          echo "🏗️ Building $SERVICE..."
+          
+          # Build with proper arguments for frontend
+          if [[ "$SERVICE" == "frontend" ]]; then
+            docker buildx build \
+              --build-arg VITE_API_URL=/api \
+              --load \
+              -t "${IMAGE_NAME}:${TAG}" \
+              -t "${IMAGE_NAME}:latest" \
+              ./src/${SERVICE}
+          else
+            docker buildx build \
+              --load \
+              -t "${IMAGE_NAME}:${TAG}" \
+              -t "${IMAGE_NAME}:latest" \
+              ./src/${SERVICE}
+          fi
+          
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+          
+          echo "✅ Build completed: ${IMAGE_NAME}:${TAG}"
+
+      - name: Scan Image with Trivy (Vulnerability Scanner)
+        id: trivy
+        continue-on-error: true
+        run: |
+          SERVICE="${{ matrix.service }}"
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          echo "🔍 Scanning $IMAGE for vulnerabilities..."
+          
+          # Run Trivy scan with multiple output formats
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --exit-code 0 \
+            "$IMAGE" | tee /tmp/trivy-report.txt
+          
+          # Generate SARIF for GitHub Security
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            --output trivy-results.sarif \
+            "$IMAGE" || true
+          
+          # Generate JSON for metrics
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output trivy-results.json \
+            "$IMAGE" || true
+          
+          # Parse results
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo "0")
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo "0")
+          TOTAL=$((CRITICAL + HIGH))
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          
+          # Summary
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔍 Trivy Vulnerability Scan: $SERVICE
+          **Container Image:** \`$IMAGE\`
+          
+          | 🚨 Critical | ⚠️ High | 📊 Total |
+          |------------|---------|----------|
+          | $CRITICAL | $HIGH | $TOTAL |
+          
+          <details>
+          <summary>📋 View Full Report</summary>
+          
+          \`\`\`
+          $(cat /tmp/trivy-report.txt)
+          \`\`\`
+          
+          </details>
+          
+          EOF
+          
+          # Fail if critical vulnerabilities found
+          if [[ $CRITICAL -gt 0 ]]; then
+            echo "❌ Found $CRITICAL critical vulnerabilities!"
+            echo "::error::Critical vulnerabilities detected in $SERVICE"
+            exit 1
+          fi
+          
+          echo "✅ Security scan completed"
+
+      - name: Upload Trivy Results as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-${{ matrix.service }}
+          path: |
+            trivy-results.sarif
+            trivy-results.json
+          retention-days: 30
+
+      - name: Push Images to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          
+          echo "🚀 Pushing images to Docker Hub..."
+          
+          docker push "${IMAGE_NAME}:${TAG}"
+          docker push "${IMAGE_NAME}:latest"
+          
+          echo "✅ Pushed: ${IMAGE_NAME}:${TAG}"
+          echo "✅ Pushed: ${IMAGE_NAME}:latest"
+
+      - name: Image Build Summary
+        if: always()
+        run: |
+          SERVICE="${{ matrix.service }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ✅ Build Summary: $SERVICE
+          
+          **Image:** \`$IMAGE\`
+          **Tag:** \`$TAG\`
+          **Status:** ${{ job.status }}
+          
+          EOF
+
   # ==========================================
   # STAGE 4: Update Manifests
   # ==========================================
-  # COMMENTED OUT FOR TESTING
-  # update-manifests:
-  #   ... (commented)
-  
+  update-manifests:
+    name: 📝 Update Helm Values
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-scan]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-and-scan.result == 'success'
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Helm Values
+        run: |
+          # Get the tag from build job
+          TAG="v1.0.${{ github.run_number }}"
+          
+          echo "📝 Updating Helm values with tag: $TAG"
+          
+          # Update values.yaml with new image tags
+          sed -i "s|tag: .*|tag: $TAG|g" apps/freshbonds/values.yaml
+          
+          # Show changes
+          git diff apps/freshbonds/values.yaml
+          
+          # Commit and push
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          git add apps/freshbonds/values.yaml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️ No changes to commit"
+          else
+            git commit -m "chore: update image tags to $TAG [skip ci]"
+            git push
+            echo "✅ Updated Helm values and pushed to main"
+          fi
+
+      - name: Trigger ArgoCD Sync (Optional)
+        run: |
+          echo "🔄 ArgoCD will auto-sync within 3 minutes"
+          echo "Or manually sync: kubectl patch app freshbonds -n argocd -p '{\"spec\":{\"syncPolicy\":{\"automated\":{\"prune\":true}}}}' --type merge"
+
   # ==========================================
   # STAGE 5: Notify
   # ==========================================
-  # COMMENTED OUT FOR TESTING
-  # notify:
-  #   ... (commented)
+  notify:
+    name: 📢 Notify Pipeline Status
+    runs-on: ubuntu-latest
+    needs: [detect-changes, policy-checks, build-and-scan, update-manifests]
+    if: always()
+    
+    steps:
+      - name: Pipeline Summary
+        run: |
+          echo "🎯 Pipeline Execution Summary"
+          echo "================================"
+          echo ""
+          echo "📊 Stage Results:"
+          echo "  - Detect Changes: ${{ needs.detect-changes.result }}"
+          echo "  - Policy Checks: ${{ needs.policy-checks.result }}"
+          echo "  - Build & Scan: ${{ needs.build-and-scan.result }}"
+          echo "  - Update Manifests: ${{ needs.update-manifests.result }}"
+          echo ""
+          
+          # Overall status
+          if [[ "${{ needs.build-and-scan.result }}" == "success" ]]; then
+            echo "✅ Pipeline completed successfully!"
+            exit 0
+          else
+            echo "❌ Pipeline failed or was skipped"
+            exit 1
+          fi
