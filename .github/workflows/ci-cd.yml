@@ -191,41 +191,59 @@ jobs:
           
           echo "✅ Validation completed"
 
-      # COMMENTED OUT FOR TESTING - Uncomment after OPA tests work
-      # - name: Run Kyverno Policy Tests
-      #   if: hashFiles('policies/kyverno/**') != ''
-      #   run: |
-      #     echo "🔍 Running Kyverno policy tests..."
-      #     
-      #     # Install Kyverno CLI
-      #     curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
-      #     tar -xzf kyverno-cli_v1.11.0_linux_x86_64.tar.gz
-      #     sudo mv kyverno /usr/local/bin/
-      #     rm kyverno-cli_v1.11.0_linux_x86_64.tar.gz
-      #     
-      #     # Test Helm templates (render first)
-      #     if [[ -d "apps" && -d "policies/kyverno" ]]; then
-      #       echo "Testing Kyverno policies against Helm templates..."
-      #       
-      #       # Install Helm if not already installed
-      #       if ! command -v helm &> /dev/null; then
-      #         curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      #       fi
-      #       
-      #       # Render and test each Helm chart
-      #       for chart in apps/*/; do
-      #         if [[ -f "$chart/Chart.yaml" ]]; then
-      #           chart_name=$(basename "$chart")
-      #           echo "Testing $chart_name with Kyverno policies..."
-      #           helm template "$chart_name" "$chart" > "/tmp/${chart_name}-rendered.yaml" 2>/dev/null || continue
-      #           kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}-rendered.yaml" || echo "⚠️ Some policies failed for $chart_name"
-      #         fi
-      #       done
-      #     else
-      #       echo "⚠️ apps/ or policies/kyverno/ directory not found, skipping Kyverno tests"
-      #     fi
-      #     
-      #     echo "✅ Kyverno policy tests completed"
+      - name: Run Kyverno Policy Tests
+        if: hashFiles('policies/kyverno/**') != ''
+        run: |
+          echo "🔍 Running Kyverno policy tests..."
+          
+          # Install Kyverno CLI
+          curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          tar -xzf kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          sudo mv kyverno /usr/local/bin/
+          rm kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          
+          # Install Helm
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
+          
+          # Test Helm templates
+          for chart in apps/*/; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              chart_name=$(basename "$chart")
+              echo "📦 Testing $chart_name with Kyverno..."
+              
+              helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
+              
+              # Apply Kyverno policies
+              kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml" > /tmp/kyverno-results.txt 2>&1 || true
+              
+              cat /tmp/kyverno-results.txt
+              
+              # Parse results
+              PASSED=$(grep -c "pass" /tmp/kyverno-results.txt || echo "0")
+              FAILED=$(grep -c "fail" /tmp/kyverno-results.txt || echo "0")
+              
+              # GitHub Summary
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🛡️ Kyverno Validation: $chart_name
+          | ✅ Passed | ❌ Failed |
+          |-----------|----------|
+          | $PASSED | $FAILED |
+          
+          <details>
+          <summary>📋 View Details</summary>
+          
+          \`\`\`
+          $(cat /tmp/kyverno-results.txt)
+          \`\`\`
+          
+          </details>
+          
+          EOF
+              echo ""
+            fi
+          done
+          
+          echo "✅ Kyverno policy tests completed"
 
       # - name: Run Checkov (IaC Security Scanning)
       #   uses: bridgecrewio/checkov-action@v12

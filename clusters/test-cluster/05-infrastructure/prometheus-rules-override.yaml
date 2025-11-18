@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-rules-dev
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://github.com/emiresh/argo.git
+    targetRevision: main
+    path: manifests/prometheus-rules
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-dev-overrides
+  namespace: monitoring
+data:
+  dev-rules.yaml: |
+    apiVersion: monitoring.coreos.com/v1
+    kind: PrometheusRule
+    metadata:
+      name: dev-cluster-overrides
+      namespace: monitoring
+    spec:
+      groups:
+      - name: dev-cluster
+        interval: 30s
+        rules:
+        # Disable etcd HA alerts for single-node dev cluster
+        - alert: etcdInsufficientMembers
+          expr: vector(0)
+          labels:
+            severity: none
+        - alert: etcdMembersDown
+          expr: vector(0)
+          labels:
+            severity: none
+        # Disable control plane component alerts for Kind cluster
+        # Kind runs these as static pods with self-signed certs
+        - alert: KubeControllerManagerDown
+          expr: vector(0)
+          labels:
+            severity: none
+        - alert: KubeSchedulerDown
+          expr: vector(0)
+          labels:
+            severity: none
+        - alert: KubeProxyDown
+          expr: vector(0)
+          labels:
+            severity: none

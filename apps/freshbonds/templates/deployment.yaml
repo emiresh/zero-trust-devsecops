@@ -58,10 +58,12 @@ spec:
         {{- end }}
         securityContext:
           {{- if .securityContext }}
+          privileged: {{ .securityContext.privileged | default $.Values.defaults.securityContext.privileged }}
           allowPrivilegeEscalation: {{ .securityContext.allowPrivilegeEscalation | default $.Values.defaults.securityContext.allowPrivilegeEscalation }}
           readOnlyRootFilesystem: {{ .securityContext.readOnlyRootFilesystem | default $.Values.defaults.securityContext.readOnlyRootFilesystem }}
           runAsNonRoot: {{ .securityContext.runAsNonRoot | default $.Values.defaults.securityContext.runAsNonRoot }}
           {{- else }}
+          privileged: {{ $.Values.defaults.securityContext.privileged }}
           allowPrivilegeEscalation: {{ $.Values.defaults.securityContext.allowPrivilegeEscalation }}
           readOnlyRootFilesystem: {{ $.Values.defaults.securityContext.readOnlyRootFilesystem }}
           runAsNonRoot: {{ $.Values.defaults.securityContext.runAsNonRoot }}
