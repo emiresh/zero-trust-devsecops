@@ -78,7 +78,7 @@ resource "oci_core_network_security_group_security_rule" "ssh" {
   description = "Allow SSH from specified CIDRs"
   source_type = "CIDR_BLOCK"
   source      = var.allowed_ssh_cidrs[0]
-  stateless   = false
+  stateless   = true
   
   tcp_options {
     destination_port_range {
@@ -97,7 +97,7 @@ resource "oci_core_network_security_group_security_rule" "http" {
   description = "Allow HTTP traffic"
   source_type = "CIDR_BLOCK"
   source      = "0.0.0.0/0"
-  stateless   = false
+  stateless   = true
   
   tcp_options {
     destination_port_range {
@@ -116,7 +116,7 @@ resource "oci_core_network_security_group_security_rule" "https" {
   description = "Allow HTTPS traffic"
   source_type = "CIDR_BLOCK"
   source      = "0.0.0.0/0"
-  stateless   = false
+  stateless   = true
   
   tcp_options {
     destination_port_range {
@@ -135,7 +135,7 @@ resource "oci_core_network_security_group_security_rule" "k8s_api" {
   description = "Allow Kubernetes API access"
   source_type = "CIDR_BLOCK"
   source      = var.allowed_k8s_api_cidrs[0]
-  stateless   = false
+  stateless   = true
   
   tcp_options {
     destination_port_range {
@@ -154,7 +154,7 @@ resource "oci_core_network_security_group_security_rule" "nodeport" {
   description = "Allow NodePort range"
   source_type = "CIDR_BLOCK"
   source      = "0.0.0.0/0"
-  stateless   = false
+  stateless   = true
   
   tcp_options {
     destination_port_range {
@@ -168,12 +168,12 @@ resource "oci_core_network_security_group_security_rule" "nodeport" {
 resource "oci_core_network_security_group_security_rule" "egress_all" {
   network_security_group_id = oci_core_network_security_group.main.id
   direction                 = "EGRESS"
-  protocol                  = "all"
+  protocol                  = "6" # TCP only for security
   
-  description      = "Allow all outbound traffic"
+  description      = "Allow TCP outbound traffic"
   destination_type = "CIDR_BLOCK"
   destination      = "0.0.0.0/0"
-  stateless        = false
+  stateless        = true
 }
 
 # ==========================================
@@ -210,9 +210,19 @@ resource "oci_core_instance" "main" {
   }
   
   source_details {
-    source_type             = "image"
-    source_id               = data.oci_core_images.ubuntu_arm.images[0].id
-    boot_volume_size_in_gbs = var.boot_volume_size_gb
+    source_type              = "image"
+    source_id                = data.oci_core_images.ubuntu_arm.images[0].id
+    boot_volume_size_in_gbs  = var.boot_volume_size_gb
+  }
+  
+  # Enable boot volume encryption (CKV_OCI_4)
+  launch_options {
+    is_pv_encryption_in_transit_enabled = true
+  }
+  
+  # Disable legacy metadata service (CKV_OCI_5)
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
   }
   
   create_vnic_details {
