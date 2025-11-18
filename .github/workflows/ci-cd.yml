@@ -191,10 +191,11 @@ jobs:
           
           echo "✅ Validation completed"
 
-      - name: Run Kyverno Policy Tests
+      - name: Validate Kubernetes Manifests with Kyverno (Admission Control)
         if: hashFiles('policies/kyverno/**') != ''
         run: |
-          echo "🔍 Running Kyverno policy tests..."
+          echo "🛡️ Validating Kubernetes manifests with Kyverno policies..."
+          echo ""
           
           # Install Kyverno CLI
           curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
