@@ -170,6 +170,8 @@ jobs:
               # GitHub Summary
               cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🔐 OPA Validation: $chart_name
+          **Policy-as-Code:** Custom security rules and business logic validation
+          
           | ✅ Passed | ⚠️ Warnings | ❌ Failures |
           |-----------|-------------|-------------|
           | $PASSED | $WARNINGS | $FAILURES |
@@ -230,6 +232,8 @@ jobs:
               # GitHub Summary
               cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🛡️ Kyverno Validation: $chart_name
+          **Admission Control:** Kubernetes Pod Security Standards enforcement
+          
           | ✅ Passed | ❌ Failed | ⚠️ Warnings | ⏭️ Skipped |
           |-----------|----------|-------------|-----------|
           | $PASSED | $FAILED | $WARNINGS | $SKIPPED |
