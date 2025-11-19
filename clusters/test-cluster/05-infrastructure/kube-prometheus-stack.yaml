@@ -37,11 +37,11 @@ spec:
                     requests:
                       storage: 10Gi
 
-            # Minimal resource limits and requests
+            # Optimized based on actual usage: 14m CPU, 618Mi memory
             resources:
               requests:
-                memory: 512Mi
-                cpu: 200m
+                memory: 700Mi
+                cpu: 50m
               limits:
                 memory: 1Gi
                 cpu: 500m
@@ -73,13 +73,13 @@ spec:
             storageClassName: local-path
             size: 5Gi
             
-          # Minimal resource limits and requests
+          # Optimized based on actual usage: 3m CPU, 242Mi memory
           resources:
             requests:
-              memory: 128Mi
-              cpu: 50m
-            limits:
               memory: 256Mi
+              cpu: 25m
+            limits:
+              memory: 512Mi
               cpu: 100m
 
           # Service configuration
@@ -186,11 +186,11 @@ spec:
                     requests:
                       storage: 2Gi
 
-            # Minimal resource limits and requests
+            # Optimized based on actual usage: 1m CPU, 33Mi memory
             resources:
               requests:
                 memory: 64Mi
-                cpu: 50m
+                cpu: 10m
               limits:
                 memory: 128Mi
                 cpu: 100m
@@ -240,10 +240,11 @@ spec:
         # Prometheus Operator configuration
         prometheusOperator:
           enabled: true
+          # Optimized based on actual usage: 1m CPU, 32Mi memory
           resources:
             requests:
               memory: 64Mi
-              cpu: 50m
+              cpu: 10m
             limits:
               memory: 128Mi
               cpu: 100m

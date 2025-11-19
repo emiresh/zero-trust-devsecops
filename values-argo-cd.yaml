@@ -893,13 +893,14 @@ controller:
   podLabels: {}
 
   # -- Resource limits and requests for the application controller pods
+  # Optimized based on actual usage: 7m CPU, 311Mi memory
   resources:
     requests:
-      cpu: 250m
-      memory: 512Mi
+      cpu: 100m
+      memory: 320Mi
     limits:
-      cpu: 1
-      memory: 1Gi
+      cpu: 500m
+      memory: 512Mi
 
   # Application controller container ports
   containerPorts:
@@ -2136,10 +2137,11 @@ server:
   podLabels: {}
 
   # -- Resource limits and requests for the Argo CD server
+  # Optimized based on actual usage: 1m CPU, 87Mi memory
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 10m
+      memory: 96Mi
     limits:
       cpu: 250m
       memory: 256Mi
@@ -2903,13 +2905,14 @@ repoServer:
   podLabels: {}
 
   # -- Resource limits and requests for the repo server pods
+  # Optimized based on actual usage: 2m CPU, 54Mi memory
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 25m
+      memory: 64Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 256Mi
 
   # Repo server container ports
   containerPorts:

@@ -29,14 +29,14 @@ spec:
           enabled: true
           url: "http://falcosidekick:2801"
         
-        # Resource limits
+        # Optimized based on actual usage: 5-8m CPU, 53-62Mi memory per node
         resources:
           requests:
-            cpu: 100m
-            memory: 512Mi
+            cpu: 50m
+            memory: 64Mi
           limits:
             cpu: 200m
-            memory: 1024Mi
+            memory: 128Mi
         
         # Falco rules configuration
         falco:
@@ -153,14 +153,14 @@ spec:
             # Custom fields to add to alerts
             customfields: "environment:production,cluster:test-cluster"
           
-          # Resources
+          # Optimized based on actual usage: 1m CPU, 12Mi memory
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 10m
+              memory: 32Mi
             limits:
               cpu: 100m
-              memory: 128Mi
+              memory: 64Mi
           
           # Web UI configuration
           webui:
