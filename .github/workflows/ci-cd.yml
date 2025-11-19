@@ -390,26 +390,26 @@ jobs:
           
           echo "📦 Image Tag: $TAG"
 
-      - name: Build AMD64 Image for Security Scanning
+      - name: Build ARM64 Image
         id: build
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
           
-          echo "🏗️ Building $SERVICE (amd64) for security scanning..."
+          echo "🏗️ Building $SERVICE for ARM64 (matching your cluster architecture)..."
           
-          # Build AMD64 image locally for scanning
+          # Build ARM64 image locally (matches your worker nodes)
           if [[ "$SERVICE" == "frontend" ]]; then
             docker buildx build \
-              --platform linux/amd64 \
+              --platform linux/arm64 \
               --build-arg VITE_API_URL=/api \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
           else
             docker buildx build \
-              --platform linux/amd64 \
+              --platform linux/arm64 \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
@@ -418,7 +418,7 @@ jobs:
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
           
-          echo "✅ AMD64 image built for scanning"
+          echo "✅ ARM64 image built successfully"
 
       - name: Scan Image with Trivy (Vulnerability Scanner)
         id: trivy
@@ -462,7 +462,7 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🔍 Trivy Vulnerability Scan: $SERVICE
           **Container Image:** \`$IMAGE\`
-          **Scanned Platform:** linux/amd64
+          **Platform:** linux/arm64 (matches cluster nodes)
           
           | 🚨 Critical | ⚠️ High | 📊 Total |
           |------------|---------|----------|
@@ -488,38 +488,26 @@ jobs:
           
           echo "✅ Security scan passed - safe to push"
 
-      - name: Build and Push Multi-Architecture Images
+      - name: Push ARM64 Image to Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ steps.build.outputs.image_name }}"
           
-          echo "🏗️ Building and pushing multi-arch images..."
-          echo "   Platforms: linux/amd64, linux/arm64"
-          echo "   ✅ Security scan passed - proceeding with push"
+          echo "🚀 Pushing ARM64 image to Docker Hub..."
+          echo "   ✅ Security scan passed"
           
-          # Build and push multi-arch images (uses layer cache from AMD64 build)
-          if [[ "$SERVICE" == "frontend" ]]; then
-            docker buildx build \
-              --platform linux/amd64,linux/arm64 \
-              --build-arg VITE_API_URL=/api \
-              --push \
-              -t "${IMAGE_NAME}:${TAG}" \
-              -t "${IMAGE_NAME}:latest" \
-              ./src/${SERVICE}
-          else
-            docker buildx build \
-              --platform linux/amd64,linux/arm64 \
-              --push \
-              -t "${IMAGE_NAME}:${TAG}" \
-              -t "${IMAGE_NAME}:latest" \
-              ./src/${SERVICE}
-          fi
+          # Push the scanned image
+          docker push "${IMAGE_NAME}:${TAG}"
           
-          echo "✅ Multi-arch images pushed to Docker Hub:"
-          echo "   - ${IMAGE_NAME}:${TAG} (amd64, arm64)"
-          echo "   - ${IMAGE_NAME}:latest (amd64, arm64)"
+          # Also tag and push as 'latest'
+          docker tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
+          
+          echo "✅ ARM64 images pushed to Docker Hub:"
+          echo "   - ${IMAGE_NAME}:${TAG}"
+          echo "   - ${IMAGE_NAME}:latest"
 
       - name: Upload Trivy Results as Artifact
         if: always()
