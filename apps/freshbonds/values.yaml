@@ -4,14 +4,16 @@ app:
 namespace: dev
 
 # Default values for all deployments (can be overridden per deployment)
+# Based on actual usage analysis: CPU 1m, Memory 2-38Mi
+# Requests set with 10x safety margin, Limits allow 10x burst
 defaults:
   resources:
     limits:
-      cpu: "200m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
     requests:
-      cpu: "50m"
-      memory: "64Mi"
+      cpu: "10m"
+      memory: "32Mi"
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
@@ -73,6 +75,13 @@ deployments:
       repository: docker.io/emiresh/freshbonds-frontend
       tag: v1.0.53
       pullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "50m"
+        memory: "64Mi"
+      requests:
+        cpu: "5m"
+        memory: "16Mi"
     service:
       name: frontend-service
       port: 80
@@ -105,6 +114,13 @@ deployments:
       repository: docker.io/emiresh/freshbonds-product-service
       tag: v1.0.53
       pullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+      requests:
+        cpu: "10m"
+        memory: "64Mi"
     service:
       name: product-service
       port: 8081
@@ -137,6 +153,13 @@ deployments:
       repository: docker.io/emiresh/freshbonds-user-service
       tag: v1.0.53
       pullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+      requests:
+        cpu: "10m"
+        memory: "64Mi"
     service:
       name: user-service
       port: 8082
