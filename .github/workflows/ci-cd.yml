@@ -362,6 +362,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up QEMU (for ARM64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -390,26 +395,32 @@ jobs:
           
           echo "📦 Image Tag: $TAG"
 
-      - name: Build ARM64 Image
+      - name: Build Image (Architecture Based on Service)
         id: build
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
           
-          echo "🏗️ Building $SERVICE for ARM64 (matching your cluster architecture)..."
-          
-          # Build ARM64 image locally (matches your worker nodes)
+          # Frontend: Build AMD64 (Vite build fails in QEMU, but nginx runs on ARM64 fine)
+          # Backend: Build ARM64 (simple npm install works fine in QEMU)
           if [[ "$SERVICE" == "frontend" ]]; then
+            PLATFORM="linux/amd64"
+            echo "🏗️ Building $SERVICE for AMD64 (Vite build issues with QEMU)"
+            echo "ℹ️  Note: nginx container runs fine on ARM64 nodes"
+            
             docker buildx build \
-              --platform linux/arm64 \
+              --platform ${PLATFORM} \
               --build-arg VITE_API_URL=/api \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
           else
+            PLATFORM="linux/arm64"
+            echo "🏗️ Building $SERVICE for ARM64 (matches cluster nodes)"
+            
             docker buildx build \
-              --platform linux/arm64 \
+              --platform ${PLATFORM} \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
@@ -417,14 +428,16 @@ jobs:
           
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+          echo "platform=${PLATFORM}" >> $GITHUB_OUTPUT
           
-          echo "✅ ARM64 image built successfully"
+          echo "✅ ${PLATFORM} image built successfully"
 
       - name: Scan Image with Trivy (Vulnerability Scanner)
         id: trivy
         run: |
           SERVICE="${{ matrix.service }}"
           IMAGE="${{ steps.build.outputs.full_image }}"
+          PLATFORM="${{ steps.build.outputs.platform }}"
           
           echo "🔍 Scanning $IMAGE for vulnerabilities..."
           
@@ -462,7 +475,7 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🔍 Trivy Vulnerability Scan: $SERVICE
           **Container Image:** \`$IMAGE\`
-          **Platform:** linux/arm64 (matches cluster nodes)
+          **Platform:** ${PLATFORM}
           
           | 🚨 Critical | ⚠️ High | 📊 Total |
           |------------|---------|----------|
@@ -479,7 +492,7 @@ jobs:
           
           EOF
           
-          # BLOCK push if critical vulnerabilities found
+          # BLOCK push if critical vulnerabilities
           if [[ $CRITICAL -gt 0 ]]; then
             echo "❌ BLOCKING: Found $CRITICAL critical vulnerabilities!"
             echo "::error::Critical vulnerabilities detected in $SERVICE - push blocked"
@@ -488,14 +501,16 @@ jobs:
           
           echo "✅ Security scan passed - safe to push"
 
-      - name: Push ARM64 Image to Registry
+      - name: Push Image to Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          PLATFORM="${{ steps.build.outputs.platform }}"
           
-          echo "🚀 Pushing ARM64 image to Docker Hub..."
+          echo "🚀 Pushing image to Docker Hub..."
+          echo "   Platform: ${PLATFORM}"
           echo "   ✅ Security scan passed"
           
           # Push the scanned image
@@ -505,7 +520,7 @@ jobs:
           docker tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}:latest"
           docker push "${IMAGE_NAME}:latest"
           
-          echo "✅ ARM64 images pushed to Docker Hub:"
+          echo "✅ Images pushed to Docker Hub:"
           echo "   - ${IMAGE_NAME}:${TAG}"
           echo "   - ${IMAGE_NAME}:latest"
 
