@@ -410,26 +410,18 @@ jobs:
           IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
           
           if [[ "$SERVICE" == "frontend" ]]; then
-            echo "🏗️ Building frontend for ARM64 (native Docker)..."
+            echo "🏗️ Building frontend for AMD64 (for local scanning)..."
             
-            # Try native Docker build without buildx/QEMU emulation first
-            if docker build \
-              --platform linux/arm64 \
+            # Build AMD64 locally first for scanning
+            docker buildx build \
+              --platform linux/amd64 \
               --build-arg VITE_API_URL=/api \
+              --load \
               -t "${IMAGE_NAME}:${TAG}" \
-              ./src/${SERVICE} 2>&1 | tee /tmp/frontend-build.log; then
-              echo "✅ Native ARM64 build succeeded!"
-              echo "skip_build=false" >> $GITHUB_OUTPUT
-            else
-              echo "⚠️ Native build failed, trying buildx with QEMU..."
-              docker buildx build \
-                --platform linux/arm64 \
-                --load \
-                --build-arg VITE_API_URL=/api \
-                -t "${IMAGE_NAME}:${TAG}" \
-                ./src/${SERVICE}
-              echo "skip_build=false" >> $GITHUB_OUTPUT
-            fi
+              ./src/${SERVICE}
+            
+            echo "✅ AMD64 build completed for scanning"
+            echo "is_multiarch=true" >> $GITHUB_OUTPUT
           else
             # Backend: Build ARM64 only
             echo "🏗️ Building $SERVICE for ARM64..."
@@ -440,16 +432,15 @@ jobs:
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
             
-            echo "skip_build=false" >> $GITHUB_OUTPUT
+            echo "is_multiarch=false" >> $GITHUB_OUTPUT
           fi
           
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
           
-          echo "✅ Build completed for scanning"
+          echo "✅ Build completed"
 
       - name: Scan Image with Trivy (Before Push)
-        if: steps.build.outputs.skip_build != 'true'
         id: trivy
         run: |
           SERVICE="${{ matrix.service }}"
@@ -512,7 +503,7 @@ jobs:
 
       - name: Push Backend Images
         if: |
-          steps.build.outputs.skip_build != 'true' &&
+          steps.build.outputs.is_multiarch != 'true' &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main'
         run: |
@@ -525,6 +516,29 @@ jobs:
           docker push "${IMAGE_NAME}:latest"
           
           echo "✅ Pushed: ${IMAGE_NAME}:${TAG}"
+
+      - name: Build and Push Multi-Arch Frontend
+        if: |
+          steps.build.outputs.is_multiarch == 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          
+          echo "🏗️ Building multi-arch frontend (amd64 + arm64)..."
+          echo "✅ AMD64 already scanned and passed"
+          
+          # Now build and push both architectures
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg VITE_API_URL=/api \
+            --push \
+            -t "${IMAGE_NAME}:${TAG}" \
+            -t "${IMAGE_NAME}:latest" \
+            ./src/frontend
+          
+          echo "✅ Multi-arch frontend pushed: ${IMAGE_NAME}:${TAG}"
 
       - name: Upload Trivy Results as Artifact
         if: always()
