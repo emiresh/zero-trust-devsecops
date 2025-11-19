@@ -395,74 +395,71 @@ jobs:
           
           echo "📦 Image Tag: $TAG"
 
-      - name: Build Image (Architecture Based on Service)
+      - name: Build Images (Optimized Strategy)
         id: build
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
           
-          # Frontend: Build AMD64 (Vite build fails in QEMU, but nginx runs on ARM64 fine)
-          # Backend: Build ARM64 (simple npm install works fine in QEMU)
           if [[ "$SERVICE" == "frontend" ]]; then
-            PLATFORM="linux/amd64"
-            echo "🏗️ Building $SERVICE for AMD64 (Vite build issues with QEMU)"
-            echo "ℹ️  Note: nginx container runs fine on ARM64 nodes"
+            # Frontend: Build AMD64 first for scanning, then multi-arch
+            echo "🏗️ Building frontend AMD64 for scanning..."
             
             docker buildx build \
-              --platform ${PLATFORM} \
+              --platform linux/amd64 \
               --build-arg VITE_API_URL=/api \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
+            
+            echo "scan_strategy=pre-push" >> $GITHUB_OUTPUT
+            echo "needs_multiarch=true" >> $GITHUB_OUTPUT
           else
-            PLATFORM="linux/arm64"
-            echo "🏗️ Building $SERVICE for ARM64 (matches cluster nodes)"
+            # Backend: Build ARM64 only
+            echo "🏗️ Building $SERVICE for ARM64..."
             
             docker buildx build \
-              --platform ${PLATFORM} \
+              --platform linux/arm64 \
               --load \
               -t "${IMAGE_NAME}:${TAG}" \
               ./src/${SERVICE}
+            
+            echo "scan_strategy=pre-push" >> $GITHUB_OUTPUT
+            echo "needs_multiarch=false" >> $GITHUB_OUTPUT
           fi
           
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
-          echo "platform=${PLATFORM}" >> $GITHUB_OUTPUT
           
-          echo "✅ ${PLATFORM} image built successfully"
+          echo "✅ Build completed for scanning"
 
-      - name: Scan Image with Trivy (Vulnerability Scanner)
+      - name: Scan Image with Trivy (Before Push)
         id: trivy
         run: |
           SERVICE="${{ matrix.service }}"
           IMAGE="${{ steps.build.outputs.full_image }}"
-          PLATFORM="${{ steps.build.outputs.platform }}"
           
-          echo "🔍 Scanning $IMAGE for vulnerabilities..."
+          echo "🔍 Scanning $IMAGE before push..."
           
-          # Run Trivy scan
           trivy image \
             --severity HIGH,CRITICAL \
             --format table \
             --exit-code 0 \
             "$IMAGE" 2>&1 | tee /tmp/trivy-report.txt
           
-          # Generate SARIF
           trivy image \
             --severity HIGH,CRITICAL \
             --format sarif \
             --output trivy-results.sarif \
             "$IMAGE" 2>/dev/null || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
           
-          # Generate JSON
           trivy image \
             --severity HIGH,CRITICAL \
             --format json \
             --output trivy-results.json \
             "$IMAGE" 2>/dev/null || echo '{"Results":[]}' > trivy-results.json
           
-          # Parse results
           CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo "0")
           HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo "0")
           TOTAL=$((CRITICAL + HIGH))
@@ -471,58 +468,72 @@ jobs:
           echo "high=$HIGH" >> $GITHUB_OUTPUT
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
           
-          # Summary
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## 🔍 Trivy Vulnerability Scan: $SERVICE
-          **Container Image:** \`$IMAGE\`
-          **Platform:** ${PLATFORM}
+          ## 🔍 Trivy Scan (Pre-Push): $SERVICE
+          **Image:** \`$IMAGE\`
           
           | 🚨 Critical | ⚠️ High | 📊 Total |
           |------------|---------|----------|
           | $CRITICAL | $HIGH | $TOTAL |
           
           <details>
-          <summary>📋 View Full Report</summary>
+          <summary>📋 View Report</summary>
           
           \`\`\`
           $(cat /tmp/trivy-report.txt)
           \`\`\`
           
           </details>
-          
           EOF
           
-          # BLOCK push if critical vulnerabilities
+          # BLOCK if critical vulnerabilities
           if [[ $CRITICAL -gt 0 ]]; then
-            echo "❌ BLOCKING: Found $CRITICAL critical vulnerabilities!"
-            echo "::error::Critical vulnerabilities detected in $SERVICE - push blocked"
+            echo "❌ BLOCKING: $CRITICAL critical vulnerabilities!"
+            echo "::error::Critical vulnerabilities in $SERVICE"
             exit 1
           fi
           
-          echo "✅ Security scan passed - safe to push"
+          echo "✅ Scan passed - safe to push"
 
-      - name: Push Image to Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Build and Push Multi-Arch Frontend
+        if: |
+          steps.build.outputs.needs_multiarch == 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
         run: |
           SERVICE="${{ matrix.service }}"
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ steps.build.outputs.image_name }}"
-          PLATFORM="${{ steps.build.outputs.platform }}"
           
-          echo "🚀 Pushing image to Docker Hub..."
-          echo "   Platform: ${PLATFORM}"
+          echo "🏗️ Building frontend multi-arch (amd64 + arm64)..."
           echo "   ✅ Security scan passed"
           
-          # Push the scanned image
-          docker push "${IMAGE_NAME}:${TAG}"
+          # Now build and push multi-arch (uses cache from AMD64 build)
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg VITE_API_URL=/api \
+            --push \
+            -t "${IMAGE_NAME}:${TAG}" \
+            -t "${IMAGE_NAME}:latest" \
+            ./src/${SERVICE}
           
-          # Also tag and push as 'latest'
+          echo "✅ Multi-arch frontend pushed: ${IMAGE_NAME}:${TAG}"
+
+      - name: Push Backend Images
+        if: |
+          steps.build.outputs.needs_multiarch == 'false' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          
+          echo "🚀 Pushing ARM64 backend image..."
+          docker push "${IMAGE_NAME}:${TAG}"
           docker tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}:latest"
           docker push "${IMAGE_NAME}:latest"
           
-          echo "✅ Images pushed to Docker Hub:"
-          echo "   - ${IMAGE_NAME}:${TAG}"
-          echo "   - ${IMAGE_NAME}:latest"
+          echo "✅ Pushed: ${IMAGE_NAME}:${TAG}"
 
       - name: Upload Trivy Results as Artifact
         if: always()
