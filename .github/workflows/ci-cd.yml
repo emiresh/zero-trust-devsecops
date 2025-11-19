@@ -397,19 +397,21 @@ jobs:
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
           
-          echo "🏗️ Building $SERVICE..."
+          echo "🏗️ Building $SERVICE for multiple architectures (amd64, arm64)..."
           
-          # Build with proper arguments for frontend
+          # Build multi-arch images and push directly (can't use --load with multi-platform)
           if [[ "$SERVICE" == "frontend" ]]; then
             docker buildx build \
+              --platform linux/amd64,linux/arm64 \
               --build-arg VITE_API_URL=/api \
-              --load \
+              --push \
               -t "${IMAGE_NAME}:${TAG}" \
               -t "${IMAGE_NAME}:latest" \
               ./src/${SERVICE}
           else
             docker buildx build \
-              --load \
+              --platform linux/amd64,linux/arm64 \
+              --push \
               -t "${IMAGE_NAME}:${TAG}" \
               -t "${IMAGE_NAME}:latest" \
               ./src/${SERVICE}
@@ -418,7 +420,8 @@ jobs:
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
           
-          echo "✅ Build completed: ${IMAGE_NAME}:${TAG}"
+          echo "✅ Multi-arch build completed: ${IMAGE_NAME}:${TAG}"
+          echo "   - Platforms: linux/amd64, linux/arm64"
 
       - name: Scan Image with Trivy (Vulnerability Scanner)
         id: trivy
@@ -428,8 +431,10 @@ jobs:
           IMAGE="${{ steps.build.outputs.full_image }}"
           
           echo "🔍 Scanning $IMAGE for vulnerabilities..."
+          echo "ℹ️ Note: Scanning manifest for multi-arch image"
           
-          # Run Trivy scan with multiple output formats
+          # For multi-arch images, scan the manifest
+          # Trivy will automatically select the appropriate platform
           trivy image \
             --severity HIGH,CRITICAL \
             --format table \
@@ -463,6 +468,7 @@ jobs:
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🔍 Trivy Vulnerability Scan: $SERVICE
           **Container Image:** \`$IMAGE\`
+          **Architectures:** linux/amd64, linux/arm64
           
           | 🚨 Critical | ⚠️ High | 📊 Total |
           |------------|---------|----------|
@@ -498,20 +504,6 @@ jobs:
             trivy-results.json
           retention-days: 30
 
-      - name: Push Images to Docker Hub
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
-          TAG="${{ steps.meta.outputs.tag }}"
-          
-          echo "🚀 Pushing images to Docker Hub..."
-          
-          docker push "${IMAGE_NAME}:${TAG}"
-          docker push "${IMAGE_NAME}:latest"
-          
-          echo "✅ Pushed: ${IMAGE_NAME}:${TAG}"
-          echo "✅ Pushed: ${IMAGE_NAME}:latest"
-
       - name: Image Build Summary
         if: always()
         run: |
@@ -524,7 +516,9 @@ jobs:
           
           **Image:** \`$IMAGE\`
           **Tag:** \`$TAG\`
+          **Architectures:** linux/amd64, linux/arm64
           **Status:** ${{ job.status }}
+          **Pushed to:** Docker Hub
           
           EOF
 
