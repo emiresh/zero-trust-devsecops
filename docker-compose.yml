@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # API Gateway
-  api-gateway:
+  apigateway-service:
     build: ./src/api-gateway
     container_name: fresh-bonds-gateway
     ports:
@@ -66,7 +66,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api-gateway
+      - apigateway-service
     networks:
       - fresh-bonds-network
 
