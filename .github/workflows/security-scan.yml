@@ -53,7 +53,7 @@ jobs:
 
       - name: Pull Latest Image
         run: |
-          docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+          docker pull ${{ env.IMAGE_PREFIX }}/freshbonds-${{ matrix.service }}:latest
 
       - name: Run Trivy Scan
         run: |
@@ -68,7 +68,7 @@ jobs:
             --severity CRITICAL,HIGH,MEDIUM,LOW \
             --vuln-type os,library \
             --no-progress \
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+            ${{ env.IMAGE_PREFIX }}/freshbonds-${{ matrix.service }}:latest
 
       - name: Analyze Results
         id: analyze
@@ -114,7 +114,7 @@ jobs:
             const body = `## Security Scan Results
             
             **Service:** \`${service}\`
-            **Image:** \`${{ env.IMAGE_PREFIX }}/${service}:latest\`
+            **Image:** \`${{ env.IMAGE_PREFIX }}/freshbonds-${service}:latest\`
             **Scan Date:** ${new Date().toISOString()}
             
             ### Vulnerability Summary
@@ -185,7 +185,7 @@ jobs:
                     "service": "${{ matrix.service }}",
                     "critical_count": "${{ steps.analyze.outputs.critical }}",
                     "high_count": "${{ steps.analyze.outputs.high }}",
-                    "image": "${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest",
+                    "image": "${{ env.IMAGE_PREFIX }}/freshbonds-${{ matrix.service }}:latest",
                     "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
