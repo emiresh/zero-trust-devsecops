@@ -295,6 +295,12 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Install Dependencies
+        run: |
+          cd src/${{ matrix.service }}
+          echo "📦 Installing dependencies for ${{ matrix.service }}..."
+          npm ci --prefer-offline --no-audit
+
       - name: Run npm audit
         run: |
           cd src/${{ matrix.service }}
