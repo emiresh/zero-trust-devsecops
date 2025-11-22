@@ -8,8 +8,8 @@ skip-path:
   - Future/
 
 # Skip specific checks that are not applicable or too strict for this project
+# CKV_K8S_35: Secrets as env vars are acceptable for Jobs with proper RBAC
+# Our db-init job has automountServiceAccountToken: false and proper security context
 skip-check:
-  # CKV_K8S_35: Secrets as env vars are acceptable for Jobs with proper RBAC
-  # Our db-init job has automountServiceAccountToken: false and proper security context
   - CKV_K8S_35
 
