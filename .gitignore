@@ -1,5 +1,7 @@
 # Secrets
 secrets/
+sealed-secrets-keys-backup.yaml
+*sealed-secrets-keys*.yaml
 
 # Node.js
 node_modules/
