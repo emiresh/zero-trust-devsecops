@@ -1,0 +1,15 @@
+# Checkov Configuration
+# Documentation: https://www.checkov.io/2.Basics/Suppressing%20and%20Skipping%20Policies.html
+
+# Skip directories that contain test/example files
+skip-path:
+  - test-pod.yaml
+  - test-pvc.yaml
+  - Future/
+
+# Skip specific checks that are not applicable or too strict for this project
+skip-check:
+  # CKV_K8S_35: Secrets as env vars are acceptable for Jobs with proper RBAC
+  # Our db-init job has automountServiceAccountToken: false and proper security context
+  - CKV_K8S_35
+
