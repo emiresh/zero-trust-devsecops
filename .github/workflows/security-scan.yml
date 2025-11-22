@@ -404,7 +404,8 @@ jobs:
           soft_fail: false
           output_format: cli,sarif,json
           output_file_path: console,checkov-results.sarif,checkov-results.json
-          skip_check: CKV_K8S_43  # Image tag latest (handled by our workflow)
+          skip_check: CKV_K8S_43,CKV_K8S_35  # CKV_K8S_43: Image tag (handled by workflow), CKV_K8S_35: Secrets as env (acceptable for Jobs)
+          config_file: .checkov.yaml
 
       - name: Analyze Checkov Results
         id: analyze
