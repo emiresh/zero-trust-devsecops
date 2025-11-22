@@ -22,6 +22,7 @@ permissions:
   contents: read
   security-events: write
   issues: write
+  actions: read
 
 env:
   DOCKER_REGISTRY: docker.io
@@ -412,9 +413,10 @@ jobs:
         if: always()
         run: |
           if [[ -f "checkov-results.json" ]]; then
-            FAILED=$(jq '.summary.failed // 0' checkov-results.json)
-            PASSED=$(jq '.summary.passed // 0' checkov-results.json)
-            SKIPPED=$(jq '.summary.skipped // 0' checkov-results.json)
+            # Checkov results can be an array or object, handle both
+            FAILED=$(jq 'if type=="array" then map(.summary.failed // 0) | add else .summary.failed // 0 end' checkov-results.json)
+            PASSED=$(jq 'if type=="array" then map(.summary.passed // 0) | add else .summary.passed // 0 end' checkov-results.json)
+            SKIPPED=$(jq 'if type=="array" then map(.summary.skipped // 0) | add else .summary.skipped // 0 end' checkov-results.json)
             
             echo "📊 Checkov Results:"
             echo "   ❌ Failed: $FAILED"
@@ -433,7 +435,7 @@ jobs:
 
       - name: Upload SARIF Results
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: checkov-results.sarif
           category: checkov-iac
