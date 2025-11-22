@@ -152,7 +152,7 @@ Services handle SIGTERM/SIGINT signals:
 ## Directory Structure
 
 ```
-argo/
+zero-trust-devsecops/
 ├── apps/
 │   └── freshbonds/          # Helm chart
 │       ├── values.yaml      # Image tags, health check config

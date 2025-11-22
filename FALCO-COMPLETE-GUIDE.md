@@ -1624,7 +1624,7 @@ falcosidekick:
 ### Important Files in Your Setup
 
 ```
-argo/
+zero-trust-devsecops/
 ├── clusters/test-cluster/
 │   ├── 05-infrastructure/
 │   │   ├── falco.yaml                    # Main Falco config

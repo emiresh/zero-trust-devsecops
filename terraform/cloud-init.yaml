@@ -163,7 +163,7 @@ runcmd:
     - sudo ufw status
     - sudo fail2ban-client status
     
-    Documentation: https://github.com/emiresh/argo
+    Documentation: https://github.com/emiresh/zero-trust-devsecops
     MOTD
   
   # Final cleanup

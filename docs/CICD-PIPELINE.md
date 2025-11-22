@@ -35,7 +35,7 @@ This repository implements a **production-grade DevSecOps pipeline** with:
 ### Repository Structure
 
 ```
-argo/
+zero-trust-devsecops/
 ├── .github/workflows/          # GitHub Actions pipelines
 │   ├── ci-cd.yml              # Main build/deploy pipeline
 │   ├── security-scan.yml      # Scheduled security scanning
@@ -148,8 +148,8 @@ argo/
 ### Step 1: Clone Repository
 
 ```bash
-git clone https://github.com/emiresh/argo.git
-cd argo
+git clone https://github.com/emiresh/zero-trust-devsecops.git
+cd zero-trust-devsecops
 ```
 
 ### Step 2: Run Setup Script
@@ -175,7 +175,7 @@ git push origin main
 
 ### Step 4: Verify Pipeline
 
-Visit: `https://github.com/emiresh/argo/actions`
+Visit: `https://github.com/emiresh/zero-trust-devsecops/actions`
 
 The pipeline should:
 ✅ Detect changed services  

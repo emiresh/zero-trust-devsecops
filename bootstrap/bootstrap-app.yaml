@@ -13,7 +13,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/emiresh/argo.git'
+    repoURL: 'https://github.com/emiresh/zero-trust-devsecops.git'
     targetRevision: main
     path: clusters/test-cluster
     directory:

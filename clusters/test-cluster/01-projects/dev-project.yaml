@@ -9,7 +9,7 @@ spec:
     - namespace: dev
       server: https://kubernetes.default.svc
   sourceRepos:
-    - 'https://github.com/emiresh/argo.git'
+    - 'https://github.com/emiresh/zero-trust-devsecops.git'
   clusterResourceWhitelist:
     - group: '*'
       kind: '*'
