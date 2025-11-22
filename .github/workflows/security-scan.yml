@@ -299,27 +299,72 @@ jobs:
         run: |
           cd src/${{ matrix.service }}
           
-          echo "🔍 Running npm audit for ${{ matrix.service }}..."
+          echo "=========================================="
+          echo "🔍 Dependency Security Scan"
+          echo "Service: ${{ matrix.service }}"
+          echo "=========================================="
+          echo ""
           
-          if npm audit --json > audit-results.json 2>&1; then
+          # Run audit and capture exit code
+          set +e
+          npm audit --json > audit-results.json 2>&1
+          AUDIT_EXIT_CODE=$?
+          set -e
+          
+          if [[ $AUDIT_EXIT_CODE -eq 0 ]]; then
             echo "✅ No vulnerabilities found"
-          else
-            echo "⚠️ Vulnerabilities detected"
-            
-            # Parse audit results
-            CRITICAL=$(jq -r '.metadata.vulnerabilities.critical // 0' audit-results.json)
-            HIGH=$(jq -r '.metadata.vulnerabilities.high // 0' audit-results.json)
-            MODERATE=$(jq -r '.metadata.vulnerabilities.moderate // 0' audit-results.json)
-            
-            echo "📊 Dependency Vulnerabilities:"
-            echo "   🔴 Critical: $CRITICAL"
-            echo "   🟠 High: $HIGH"
-            echo "   🟡 Moderate: $MODERATE"
-            
-            # Show fixable vulnerabilities
             echo ""
-            echo "🛠️ Fixable vulnerabilities:"
-            npm audit fix --dry-run
+          else
+            echo "⚠️  Vulnerabilities detected in dependencies"
+            echo ""
+            
+            # Parse and display summary
+            if [[ -f audit-results.json ]]; then
+              CRITICAL=$(jq -r '.metadata.vulnerabilities.critical // 0' audit-results.json)
+              HIGH=$(jq -r '.metadata.vulnerabilities.high // 0' audit-results.json)
+              MODERATE=$(jq -r '.metadata.vulnerabilities.moderate // 0' audit-results.json)
+              LOW=$(jq -r '.metadata.vulnerabilities.low // 0' audit-results.json)
+              
+              echo "┌─────────────────────────────────────┐"
+              echo "│   Vulnerability Summary             │"
+              echo "├─────────────────────────────────────┤"
+              echo "│ 🔴 Critical:  $CRITICAL"
+              echo "│ 🟠 High:      $HIGH"
+              echo "│ 🟡 Moderate:  $MODERATE"
+              echo "│ 🔵 Low:       $LOW"
+              echo "└─────────────────────────────────────┘"
+              echo ""
+              
+              # Display detailed vulnerabilities
+              echo "📋 Detailed Vulnerability Report:"
+              echo "─────────────────────────────────────"
+              npm audit --parseable 2>&1 | while IFS= read -r line; do
+                if [[ $line == *"https://github.com/advisories"* ]]; then
+                  echo "  ➜ $line"
+                fi
+              done || true
+              echo ""
+              
+              # Show human-readable audit
+              echo "📝 Full Audit Report:"
+              echo "─────────────────────────────────────"
+              npm audit 2>&1 || true
+              echo ""
+              
+              # Show fixable vulnerabilities
+              echo "🛠️  Auto-fixable Vulnerabilities:"
+              echo "─────────────────────────────────────"
+              npm audit fix --dry-run 2>&1 || true
+              echo ""
+              
+              # Exit with error if vulnerabilities found
+              if [[ $CRITICAL -gt 0 ]] || [[ $HIGH -gt 0 ]] || [[ $MODERATE -gt 0 ]]; then
+                echo "❌ Security scan failed due to vulnerabilities"
+                echo "   Run 'npm audit fix' to fix automatically"
+                echo "   Or update package.json manually for remaining issues"
+                exit 1
+              fi
+            fi
           fi
 
       - name: Upload Audit Results
