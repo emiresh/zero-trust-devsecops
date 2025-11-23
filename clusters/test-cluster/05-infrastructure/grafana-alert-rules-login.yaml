@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules-login
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"
+data:
+  login-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: FreshBonds Login Security
+        folder: Application Alerts
+        interval: 1m
+        rules:
+          # Alert 1: High Failed Login Rate (Brute Force Detection)
+          - uid: login_brute_force
+            title: High Failed Login Rate - Brute Force Attack
+            condition: A
+            data:
+              - refId: A
+                datasourceUid: loki
+                model:
+                  expr: 'sum(count_over_time({namespace="dev", app="user-service"} | json | event="LOGIN_FAILED" [1m]))'
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 5m
+            annotations:
+              summary: "🚨 Possible brute force attack - {{ $values.A }} failed login attempts in 1 minute"
+              description: "High rate of failed login attempts detected. This may indicate a brute force attack targeting the FreshBonds login endpoint."
+            labels:
+              severity: critical
+              team: security
+              service: user-service
+              alert_type: login_security
+          
+          # Alert 2: Email Enumeration Attack
+          - uid: login_email_enumeration
+            title: Email Enumeration Attack Detected
+            condition: A
+            data:
+              - refId: A
+                datasourceUid: loki
+                model:
+                  expr: 'sum(count_over_time({namespace="dev", app="user-service"} | json | event="LOGIN_FAILED" | reason="USER_NOT_FOUND" [1m]))'
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 3m
+            annotations:
+              summary: "🕵️ Email enumeration attack - {{ $values.A }} attempts with invalid emails"
+              description: "High rate of login attempts with non-existent email addresses detected. This indicates email enumeration attack, automated scanning, or reconnaissance."
+            labels:
+              severity: warning
+              team: security
+              service: user-service
+              alert_type: login_security
+          
+          # Alert 3: Repeated Failed Logins for Same Email
+          - uid: login_repeated_failures
+            title: Repeated Failed Login Attempts - Single User
+            condition: A
+            data:
+              - refId: A
+                datasourceUid: loki
+                model:
+                  expr: 'sum by (email) (count_over_time({namespace="dev", app="user-service"} | json | event="LOGIN_FAILED" [5m]))'
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 2m
+            annotations:
+              summary: "⚠️ Multiple failed login attempts for {{ $labels.email }} ({{ $values.A }} attempts)"
+              description: "User {{ $labels.email }} has failed to login {{ $values.A }} times in the last 5 minutes. This may indicate: user forgot password, account compromise attempt, or credential stuffing attack."
+            labels:
+              severity: warning
+              team: security
+              service: user-service
+              alert_type: login_security
+          
+          # Alert 4: Failed Login from Suspicious IP
+          - uid: login_suspicious_ip
+            title: Failed Login from Suspicious IP
+            condition: A
+            data:
+              - refId: A
+                datasourceUid: loki
+                model:
+                  expr: 'sum by (ip, email) (count_over_time({namespace="dev", app="user-service"} | json | event="LOGIN_FAILED" | reason="INVALID_PASSWORD" [2m]))'
+                  instant: true
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+            noDataState: NoData
+            execErrState: Alerting
+            for: 1m
+            annotations:
+              summary: "🔐 Password attack - IP: {{ $labels.ip }}, Email: {{ $labels.email }} ({{ $values.A }} attempts)"
+              description: "Multiple failed password attempts from IP {{ $labels.ip }} for user {{ $labels.email }}. This may indicate a targeted attack on this specific account."
+            labels:
+              severity: warning
+              team: security
+              service: user-service
+              alert_type: login_security
+
+    # Contact points configuration
+    contactPoints:
+      - orgId: 1
+        name: pagerduty-freshbonds-app
+        receivers:
+          - uid: pagerduty_app
+            type: pagerduty
+            settings:
+              integrationKey: $PAGERDUTY_INTEGRATION_KEY_APP
+              severity: critical
+              class: Login Security
+              component: User Service
+              group: FreshBonds Application
+    
+    # Notification policies
+    policies:
+      - orgId: 1
+        receiver: pagerduty-freshbonds-app
+        group_by:
+          - alertname
+          - severity
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+        matchers:
+          - alert_type = login_security
