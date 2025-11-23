@@ -4,17 +4,41 @@ on:
   push:
     branches:
       - main
+      - develop
+      - 'release/**'
     paths:
       - 'src/**'
       - 'apps/*/templates/**'
       - 'Dockerfile'
+      - '.github/workflows/ci-cd.yml'
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches:
       - main
+      - develop
     paths:
       - 'src/**'
       - 'apps/*/templates/**'
       - 'Dockerfile'
+      - '.github/workflows/ci-cd.yml'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (emergency deployment only)'
+        required: false
+        default: false
+        type: boolean
+      force_deploy:
+        description: 'Force deployment even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+
+# Prevent concurrent deployments to same environment
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write          # Required for pushing manifest updates

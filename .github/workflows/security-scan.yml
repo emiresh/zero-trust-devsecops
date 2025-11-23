@@ -2,8 +2,29 @@ name: Security Scanning - Scheduled
 
 on:
   schedule:
-    # Run security scans every day at 2 AM UTC
+    # Daily vulnerability scans at 2 AM UTC (off-peak hours)
     - cron: '0 2 * * *'
+    # Weekly comprehensive scan on Mondays at 3 AM UTC
+    - cron: '0 3 * * 1'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/Dockerfile'
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '**/requirements.txt'
+      - 'terraform/**'
+      - 'clusters/**'
+      - 'policies/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/Dockerfile'
+      - '**/package.json'
+      - 'terraform/**'
+      - 'policies/**'
   workflow_dispatch:
     inputs:
       scan_type:
@@ -17,6 +38,21 @@ on:
           - policies
           - dependencies
           - iac
+      severity_threshold:
+        description: 'Minimum severity to report'
+        required: false
+        default: 'MEDIUM'
+        type: choice
+        options:
+          - CRITICAL
+          - HIGH
+          - MEDIUM
+          - LOW
+
+# Allow parallel scans for different scan types
+concurrency:
+  group: security-scan-${{ github.event.inputs.scan_type || 'scheduled' }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
