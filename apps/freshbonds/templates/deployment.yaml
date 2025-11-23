@@ -16,6 +16,8 @@ spec:
     metadata:
       labels:
         app: {{ .name }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/sealed-secret.yaml") . | sha256sum }}
     spec:
       securityContext:
         {{- if .securityContext }}
