@@ -30,8 +30,8 @@ The automated secret rotation pipeline now **actually rotates credentials** on e
 
 #### 1. MongoDB Connection Components
 ```bash
-# Instead of storing full URI with password, store components separately:
-# This allows the workflow to build new URIs with rotated passwords
+# Store STATIC connection details only (no passwords!)
+# The workflow generates new passwords on each rotation
 
 Name: MONGO_HOST
 Value: dev.qzhiudx.mongodb.net
@@ -42,9 +42,7 @@ Value: freshbonds
 Name: MONGO_USERNAME
 Value: admin
 
-Name: MONGO_PASSWORD
-Value: <current-password>
-# ⚠️ You must manually update this after each rotation
+# ✅ No MONGO_PASSWORD needed - generated fresh each rotation!
 ```
 
 #### 2. MongoDB Atlas API Key
