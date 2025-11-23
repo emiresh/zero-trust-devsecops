@@ -45,32 +45,25 @@ Value: admin
 # ✅ No MONGO_PASSWORD needed - generated fresh each rotation!
 ```
 
-#### 2. MongoDB Atlas API Key
+#### 2. MongoDB Atlas API Credentials
 ```bash
-# Create API key in MongoDB Atlas:
-# 1. Go to https://cloud.mongodb.com
-# 2. Organization Settings → Access Manager → API Keys
-# 3. Create API Key with "Organization Owner" permissions
-# 4. Copy Public Key and Private Key
+# Step 1: Get your MongoDB Atlas Project ID
+# Go to: https://cloud.mongodb.com
+# Select your project → Settings
+# Copy the "Project ID" (e.g., 507f1f77bcf86cd799439011)
 
-# Format: GROUP_ID:PUBLIC_KEY:PRIVATE_KEY
-# Add to GitHub: Settings → Secrets → Actions → New repository secret
+Name: MONGO_PROJECT_ID
+Value: 507f1f77bcf86cd799439011
+
+# Step 2: Create API Key
+# Organization Settings → Access Manager → API Keys → Create API Key
+# Permissions: "Project Owner" or "Organization Owner"
+# Copy the Public Key and Private Key
+
+# Format: PUBLIC_KEY:PRIVATE_KEY
 Name: MONGO_API_KEY
-Value: 507f1f77bcf86cd799439011:abcd1234:efgh5678wxyz
-```
-
-#### 2. MongoDB Atlas API Key
-```bash
-# Create API key in MongoDB Atlas:
-# 1. Go to https://cloud.mongodb.com
-# 2. Organization Settings → Access Manager → API Keys
-# 3. Create API Key with "Organization Owner" permissions
-# 4. Copy Public Key and Private Key
-
-# Format: GROUP_ID:PUBLIC_KEY:PRIVATE_KEY
-# Add to GitHub: Settings → Secrets → Actions → New repository secret
-Name: MONGO_API_KEY
-Value: 507f1f77bcf86cd799439011:abcd1234:efgh5678wxyz
+Value: abcdefgh:ijklmnop-qrstuvwxyz-1234567890
+#       ↑ public  ↑ private key
 ```
 
 #### 3. PagerDuty API Token
