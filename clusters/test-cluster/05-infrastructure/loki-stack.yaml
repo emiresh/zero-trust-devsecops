@@ -39,15 +39,6 @@ spec:
                 index:
                   prefix: loki_index_
                   period: 24h
-          
-          # Compactor for log retention
-          compactor:
-            working_directory: /data/loki/compactor
-            compaction_interval: 10m
-            retention_enabled: true
-            retention_delete_delay: 2h
-            retention_delete_worker_count: 150
-            delete_request_store: filesystem
         
         singleBinary:
           replicas: 1
