@@ -80,30 +80,29 @@ Name: PAGERDUTY_API_KEY
 Value: u+your_token_here_abc123xyz
 ```
 
-#### 3. PagerDuty API Token
+#### 4. PagerDuty Service IDs (Two Separate Services)
 ```bash
-# Create API token in PagerDuty:
-# 1. Go to https://yourcompany.pagerduty.com
-# 2. Integrations → API Access Keys → Create New API Key
-# 3. Name: "GitHub Actions Secret Rotation"
-# 4. Description: "Automated secret rotation workflow"
-# 5. Copy the token
+# Create two PagerDuty services for separation of concerns:
 
-# Add to GitHub
-Name: PAGERDUTY_API_KEY
-Value: u+your_token_here_abc123xyz
-```
+# Service 1: FreshBonds Application
+# - Purpose: Application-level errors (payment failures, exceptions)
+# - Used by: user-service, product-service, api-gateway
+# 1. Go to Services → Create New Service
+# 2. Name: "FreshBonds Application"
+# 3. Copy Service ID from URL (e.g., PRZZM0D)
 
-#### 4. PagerDuty Service ID
-```bash
-# Get Service ID:
-# 1. Go to your PagerDuty service
-# 2. URL will be: https://yourcompany.pagerduty.com/services/PXXXXXX
-# 3. Copy the PXXXXXX part
+Name: PAGERDUTY_SERVICE_ID_APP
+Value: PRZZM0D
 
-# Add to GitHub
-Name: PAGERDUTY_SERVICE_ID
-Value: PXXXXXX
+# Service 2: Kubernetes Infrastructure
+# - Purpose: Infrastructure monitoring (pod crashes, Falco alerts)
+# - Used by: Prometheus, Alertmanager, Falco
+# 1. Go to Services → Create New Service
+# 2. Name: "Kubernetes Infrastructure"
+# 3. Copy Service ID from URL (e.g., PKIUIBN)
+
+Name: PAGERDUTY_SERVICE_ID_INFRA
+Value: PKIUIBN
 ```
 
 ---
