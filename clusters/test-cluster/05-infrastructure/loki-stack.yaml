@@ -1,0 +1,199 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 6.46.0
+    chart: loki-stack
+    helm:
+      values: |
+        # Loki configuration
+        loki:
+          enabled: true
+          isDefault: true
+          
+          config:
+            auth_enabled: false
+            
+            ingester:
+              chunk_idle_period: 3m
+              chunk_block_size: 262144
+              chunk_retain_period: 1m
+              max_transfer_retries: 0
+              lifecycler:
+                ring:
+                  kvstore:
+                    store: inmemory
+                  replication_factor: 1
+            
+            limits_config:
+              enforce_metric_name: false
+              reject_old_samples: true
+              reject_old_samples_max_age: 168h
+              max_entries_limit_per_query: 5000
+              ingestion_rate_mb: 8
+              ingestion_burst_size_mb: 16
+            
+            schema_config:
+              configs:
+                - from: 2020-10-24
+                  store: boltdb-shipper
+                  object_store: filesystem
+                  schema: v11
+                  index:
+                    prefix: index_
+                    period: 24h
+            
+            server:
+              http_listen_port: 3100
+            
+            storage_config:
+              boltdb_shipper:
+                active_index_directory: /data/loki/boltdb-shipper-active
+                cache_location: /data/loki/boltdb-shipper-cache
+                cache_ttl: 24h
+                shared_store: filesystem
+              filesystem:
+                directory: /data/loki/chunks
+            
+            chunk_store_config:
+              max_look_back_period: 0s
+            
+            table_manager:
+              retention_deletes_enabled: false
+              retention_period: 0s
+          
+          persistence:
+            enabled: true
+            size: 10Gi
+            storageClassName: local-path
+          
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        
+        # Promtail configuration (log collector)
+        promtail:
+          enabled: true
+          
+          config:
+            clients:
+              - url: http://loki:3100/loki/api/v1/push
+            
+            positions:
+              filename: /tmp/positions.yaml
+            
+            scrape_configs:
+              # Scrape all pod logs
+              - job_name: kubernetes-pods
+                kubernetes_sd_configs:
+                  - role: pod
+                
+                pipeline_stages:
+                  # Extract JSON logs
+                  - json:
+                      expressions:
+                        level: level
+                        msg: msg
+                        timestamp: timestamp
+                  
+                  # Parse log levels
+                  - labels:
+                      level:
+                
+                relabel_configs:
+                  # Add namespace label
+                  - source_labels: [__meta_kubernetes_namespace]
+                    target_label: namespace
+                  
+                  # Add pod name
+                  - source_labels: [__meta_kubernetes_pod_name]
+                    target_label: pod
+                  
+                  # Add container name
+                  - source_labels: [__meta_kubernetes_pod_container_name]
+                    target_label: container
+                  
+                  # Add app label
+                  - source_labels: [__meta_kubernetes_pod_label_app]
+                    target_label: app
+                  
+                  # Drop empty pods
+                  - source_labels: [__meta_kubernetes_pod_label_app]
+                    action: drop
+                    regex: ''
+              
+              # FreshBonds specific logs
+              - job_name: freshbonds-logs
+                kubernetes_sd_configs:
+                  - role: pod
+                    namespaces:
+                      names:
+                        - dev
+                
+                pipeline_stages:
+                  # Extract error patterns
+                  - match:
+                      selector: '{app=~"apigateway|user-service|product-service"}'
+                      stages:
+                        - regex:
+                            expression: '(?P<level>ERROR|WARN|INFO|DEBUG)'
+                        - labels:
+                            level:
+                
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_namespace]
+                    target_label: namespace
+                  - source_labels: [__meta_kubernetes_pod_name]
+                    target_label: pod
+                  - source_labels: [__meta_kubernetes_pod_container_name]
+                    target_label: container
+                  - source_labels: [__meta_kubernetes_pod_label_app]
+                    target_label: app
+                  
+                  # Only scrape FreshBonds apps
+                  - source_labels: [__meta_kubernetes_pod_label_app]
+                    action: keep
+                    regex: (apigateway|user-service|product-service|frontend)
+          
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+        
+        # Grafana integration (use existing Grafana from kube-prometheus-stack)
+        grafana:
+          enabled: false
+          # Will use the Grafana already deployed by kube-prometheus-stack
+        
+        # Fluent Bit (alternative to Promtail - disabled)
+        fluent-bit:
+          enabled: false
+        
+        # Log Gateway (not needed for small deployments)
+        logstash:
+          enabled: false
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
