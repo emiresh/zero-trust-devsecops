@@ -227,7 +227,16 @@ app.post('/api/users/login',
       // Find user by email
       const user = await User.findOne({ email: email.toLowerCase() });
       if (!user) {
-        console.log('❌ User not found:', email);
+        // Log failed login attempt in structured format for Grafana alerting
+        console.error(JSON.stringify({
+          level: 'ERROR',
+          event: 'LOGIN_FAILED',
+          reason: 'USER_NOT_FOUND',
+          email: email,
+          timestamp: new Date().toISOString(),
+          ip: req.ip,
+          userAgent: req.get('user-agent')
+        }));
         // Use same error message to prevent email enumeration
         return res.status(401).json({ error: 'Invalid email or password' });
       }
@@ -237,7 +246,17 @@ app.post('/api/users/login',
       // Check password with timing attack protection
       const isValidPassword = await user.comparePassword(password);
       if (!isValidPassword) {
-        console.log('❌ Invalid password for user:', email);
+        // Log failed login attempt in structured format for Grafana alerting
+        console.error(JSON.stringify({
+          level: 'ERROR',
+          event: 'LOGIN_FAILED',
+          reason: 'INVALID_PASSWORD',
+          email: email,
+          userId: user._id.toString(),
+          timestamp: new Date().toISOString(),
+          ip: req.ip,
+          userAgent: req.get('user-agent')
+        }));
         return res.status(401).json({ error: 'Invalid email or password' });
       }
 
@@ -265,7 +284,18 @@ app.post('/api/users/login',
         token
       };
 
-      console.log('✅ Login successful for:', user.name);
+      // Log successful login for audit trail
+      console.log(JSON.stringify({
+        level: 'INFO',
+        event: 'LOGIN_SUCCESS',
+        email: user.email,
+        userId: user._id.toString(),
+        role: user.role,
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+      }));
+      
       res.json(responseData);
     } catch (error) {
       console.error('❌ Login error:', error);
