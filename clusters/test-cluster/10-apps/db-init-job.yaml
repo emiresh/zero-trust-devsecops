@@ -110,7 +110,7 @@ spec:
             initializeDatabase();
         envFrom:
           - secretRef:
-              name: freshbonds-secrets
+              name: freshbonds-secret
           - secretRef:
               name: admin-user-init
       volumes:
