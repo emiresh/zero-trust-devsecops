@@ -1,0 +1,205 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: promtail
+  namespace: argocd
+spec:
+  project: default
+  
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: promtail
+    targetRevision: 6.16.6
+    helm:
+      values: |
+        # Promtail configuration for FreshBonds log collection
+        config:
+          # Send logs to Loki
+          clients:
+            - url: http://loki:3100/loki/api/v1/push
+              tenant_id: ""
+          
+          # Position tracking
+          positions:
+            filename: /tmp/positions.yaml
+          
+          # Server config
+          server:
+            http_listen_port: 3101
+          
+          # Log scraping configuration
+          scrape_configs:
+            # Scrape all Kubernetes pod logs
+            - job_name: kubernetes-pods
+              kubernetes_sd_configs:
+                - role: pod
+              
+              pipeline_stages:
+                # Extract JSON logs from applications
+                - cri: {}
+                
+                # Try to parse JSON logs
+                - json:
+                    expressions:
+                      level: level
+                      msg: msg
+                      message: message
+                      timestamp: timestamp
+                    source: message
+                
+                # Extract log level if present
+                - labels:
+                    level:
+                
+                # Add timestamp
+                - timestamp:
+                    source: timestamp
+                    format: RFC3339
+              
+              relabel_configs:
+                # Add namespace label
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: namespace
+                
+                # Add pod name
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: pod
+                
+                # Add container name
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: container
+                
+                # Add app label
+                - source_labels: [__meta_kubernetes_pod_label_app]
+                  target_label: app
+                  action: replace
+                
+                # Add node name
+                - source_labels: [__meta_kubernetes_pod_node_name]
+                  target_label: node
+                
+                # Drop logs from pods without app label (system pods)
+                - source_labels: [__meta_kubernetes_pod_label_app]
+                  action: drop
+                  regex: ''
+                
+                # Keep only logs from dev namespace
+                - source_labels: [__meta_kubernetes_namespace]
+                  action: keep
+                  regex: dev
+            
+            # FreshBonds specific error tracking
+            - job_name: freshbonds-errors
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces:
+                    names:
+                      - dev
+              
+              pipeline_stages:
+                - cri: {}
+                
+                # Parse JSON logs
+                - json:
+                    expressions:
+                      level: level
+                      msg: msg
+                      message: message
+                      error: error
+                      statusCode: statusCode
+                      method: method
+                      path: path
+                    source: message
+                
+                # Only keep error/warn logs
+                - match:
+                    selector: '{level=~"ERROR|WARN|error|warn"}'
+                    stages:
+                      - labels:
+                          level:
+                          error:
+                
+                # Add labels for alerting
+                - labels:
+                    statusCode:
+                    method:
+                    path:
+              
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: namespace
+                
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: pod
+                
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: container
+                
+                - source_labels: [__meta_kubernetes_pod_label_app]
+                  target_label: app
+                
+                # Only scrape FreshBonds application pods
+                - source_labels: [__meta_kubernetes_pod_label_app]
+                  action: keep
+                  regex: (apigateway|user-service|product-service|frontend)
+        
+        # Deploy as DaemonSet (runs on every node)
+        daemonset:
+          enabled: true
+        
+        # Resources
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi
+        
+        # Service Account
+        serviceAccount:
+          create: true
+          name: promtail
+        
+        # RBAC permissions to read pod logs
+        rbac:
+          create: true
+          pspEnabled: false
+        
+        # Volume mounts for log access
+        defaultVolumes:
+          - name: run
+            hostPath:
+              path: /run/promtail
+          - name: containers
+            hostPath:
+              path: /var/lib/docker/containers
+          - name: pods
+            hostPath:
+              path: /var/log/pods
+        
+        defaultVolumeMounts:
+          - name: run
+            mountPath: /run/promtail
+          - name: containers
+            mountPath: /var/lib/docker/containers
+            readOnly: true
+          - name: pods
+            mountPath: /var/log/pods
+            readOnly: true
+        
+        # Tolerations to run on all nodes
+        tolerations:
+          - effect: NoSchedule
+            operator: Exists
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

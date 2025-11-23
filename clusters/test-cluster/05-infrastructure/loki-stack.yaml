@@ -10,69 +10,52 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     targetRevision: 6.46.0
-    chart: loki-stack
+    chart: loki
     helm:
       values: |
-        # Loki configuration
+        # Loki single binary deployment mode
+        deploymentMode: SingleBinary
+        
         loki:
-          enabled: true
-          isDefault: true
+          auth_enabled: false
           
-          config:
-            auth_enabled: false
-            
-            ingester:
-              chunk_idle_period: 3m
-              chunk_block_size: 262144
-              chunk_retain_period: 1m
-              max_transfer_retries: 0
-              lifecycler:
-                ring:
-                  kvstore:
-                    store: inmemory
-                  replication_factor: 1
-            
-            limits_config:
-              enforce_metric_name: false
-              reject_old_samples: true
-              reject_old_samples_max_age: 168h
-              max_entries_limit_per_query: 5000
-              ingestion_rate_mb: 8
-              ingestion_burst_size_mb: 16
-            
-            schema_config:
-              configs:
-                - from: 2020-10-24
-                  store: boltdb-shipper
-                  object_store: filesystem
-                  schema: v11
-                  index:
-                    prefix: index_
-                    period: 24h
-            
-            server:
-              http_listen_port: 3100
-            
-            storage_config:
-              boltdb_shipper:
-                active_index_directory: /data/loki/boltdb-shipper-active
-                cache_location: /data/loki/boltdb-shipper-cache
-                cache_ttl: 24h
-                shared_store: filesystem
-              filesystem:
-                directory: /data/loki/chunks
-            
-            chunk_store_config:
-              max_look_back_period: 0s
-            
-            table_manager:
-              retention_deletes_enabled: false
-              retention_period: 0s
+          commonConfig:
+            replication_factor: 1
+          
+          storage:
+            type: 'filesystem'
+          
+          limits_config:
+            retention_period: 5h
+            reject_old_samples: true
+            reject_old_samples_max_age: 5h
+          
+          schemaConfig:
+            configs:
+              - from: "2024-01-01"
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: loki_index_
+                  period: 24h
+          
+          # Compactor for log retention
+          compactor:
+            working_directory: /data/loki/compactor
+            shared_store: filesystem
+            compaction_interval: 10m
+            retention_enabled: true
+            retention_delete_delay: 2h
+            retention_delete_worker_count: 150
+        
+        singleBinary:
+          replicas: 1
           
           persistence:
             enabled: true
             size: 10Gi
-            storageClassName: local-path
+            storageClass: local-path
           
           resources:
             limits:
@@ -82,109 +65,27 @@ spec:
               cpu: 100m
               memory: 128Mi
         
-        # Promtail configuration (log collector)
-        promtail:
-          enabled: true
-          
-          config:
-            clients:
-              - url: http://loki:3100/loki/api/v1/push
-            
-            positions:
-              filename: /tmp/positions.yaml
-            
-            scrape_configs:
-              # Scrape all pod logs
-              - job_name: kubernetes-pods
-                kubernetes_sd_configs:
-                  - role: pod
-                
-                pipeline_stages:
-                  # Extract JSON logs
-                  - json:
-                      expressions:
-                        level: level
-                        msg: msg
-                        timestamp: timestamp
-                  
-                  # Parse log levels
-                  - labels:
-                      level:
-                
-                relabel_configs:
-                  # Add namespace label
-                  - source_labels: [__meta_kubernetes_namespace]
-                    target_label: namespace
-                  
-                  # Add pod name
-                  - source_labels: [__meta_kubernetes_pod_name]
-                    target_label: pod
-                  
-                  # Add container name
-                  - source_labels: [__meta_kubernetes_pod_container_name]
-                    target_label: container
-                  
-                  # Add app label
-                  - source_labels: [__meta_kubernetes_pod_label_app]
-                    target_label: app
-                  
-                  # Drop empty pods
-                  - source_labels: [__meta_kubernetes_pod_label_app]
-                    action: drop
-                    regex: ''
-              
-              # FreshBonds specific logs
-              - job_name: freshbonds-logs
-                kubernetes_sd_configs:
-                  - role: pod
-                    namespaces:
-                      names:
-                        - dev
-                
-                pipeline_stages:
-                  # Extract error patterns
-                  - match:
-                      selector: '{app=~"apigateway|user-service|product-service"}'
-                      stages:
-                        - regex:
-                            expression: '(?P<level>ERROR|WARN|INFO|DEBUG)'
-                        - labels:
-                            level:
-                
-                relabel_configs:
-                  - source_labels: [__meta_kubernetes_namespace]
-                    target_label: namespace
-                  - source_labels: [__meta_kubernetes_pod_name]
-                    target_label: pod
-                  - source_labels: [__meta_kubernetes_pod_container_name]
-                    target_label: container
-                  - source_labels: [__meta_kubernetes_pod_label_app]
-                    target_label: app
-                  
-                  # Only scrape FreshBonds apps
-                  - source_labels: [__meta_kubernetes_pod_label_app]
-                    action: keep
-                    regex: (apigateway|user-service|product-service|frontend)
-          
-          resources:
-            limits:
-              cpu: 200m
-              memory: 128Mi
-            requests:
-              cpu: 100m
-              memory: 64Mi
+        # Disable components not needed in single binary mode
+        backend:
+          replicas: 0
+        read:
+          replicas: 0
+        write:
+          replicas: 0
         
-        # Grafana integration (use existing Grafana from kube-prometheus-stack)
-        grafana:
-          enabled: false
-          # Will use the Grafana already deployed by kube-prometheus-stack
+        # Monitoring
+        monitoring:
+          selfMonitoring:
+            enabled: false
+            grafanaAgent:
+              installOperator: false
         
-        # Fluent Bit (alternative to Promtail - disabled)
-        fluent-bit:
+        # Service configuration
+        gateway:
           enabled: false
         
-        # Log Gateway (not needed for small deployments)
-        logstash:
+        # For log collection, use Promtail separately
+        test:
           enabled: false
   
   destination:
