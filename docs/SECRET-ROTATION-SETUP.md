@@ -24,12 +24,30 @@ The automated secret rotation pipeline now **actually rotates credentials** on e
 ### Already Configured
 - `GITHUB_TOKEN` - Auto-provided by GitHub Actions
 - `KUBECONFIG` - Kubernetes cluster access (base64 encoded)
-- `MONGODB_URI` - Current MongoDB connection string
 - `IPG_APP_NAME`, `IPG_APP_ID`, `IPG_APP_TOKEN`, `IPG_HASH_SALT`, `IPG_CALLBACK_URL` - Payment gateway
 
 ### 🆕 Add These for Full Rotation
 
-#### 1. MongoDB Atlas API Key
+#### 1. MongoDB Connection Components
+```bash
+# Instead of storing full URI with password, store components separately:
+# This allows the workflow to build new URIs with rotated passwords
+
+Name: MONGO_HOST
+Value: dev.qzhiudx.mongodb.net
+
+Name: MONGO_DATABASE
+Value: freshbonds
+
+Name: MONGO_USERNAME
+Value: admin
+
+Name: MONGO_PASSWORD
+Value: <current-password>
+# ⚠️ You must manually update this after each rotation
+```
+
+#### 2. MongoDB Atlas API Key
 ```bash
 # Create API key in MongoDB Atlas:
 # 1. Go to https://cloud.mongodb.com
@@ -43,7 +61,21 @@ Name: MONGO_API_KEY
 Value: 507f1f77bcf86cd799439011:abcd1234:efgh5678wxyz
 ```
 
-#### 2. PagerDuty API Token
+#### 2. MongoDB Atlas API Key
+```bash
+# Create API key in MongoDB Atlas:
+# 1. Go to https://cloud.mongodb.com
+# 2. Organization Settings → Access Manager → API Keys
+# 3. Create API Key with "Organization Owner" permissions
+# 4. Copy Public Key and Private Key
+
+# Format: GROUP_ID:PUBLIC_KEY:PRIVATE_KEY
+# Add to GitHub: Settings → Secrets → Actions → New repository secret
+Name: MONGO_API_KEY
+Value: 507f1f77bcf86cd799439011:abcd1234:efgh5678wxyz
+```
+
+#### 3. PagerDuty API Token
 ```bash
 # Create API token in PagerDuty:
 # 1. Go to https://yourcompany.pagerduty.com
@@ -57,7 +89,21 @@ Name: PAGERDUTY_API_KEY
 Value: u+your_token_here_abc123xyz
 ```
 
-#### 3. PagerDuty Service ID
+#### 3. PagerDuty API Token
+```bash
+# Create API token in PagerDuty:
+# 1. Go to https://yourcompany.pagerduty.com
+# 2. Integrations → API Access Keys → Create New API Key
+# 3. Name: "GitHub Actions Secret Rotation"
+# 4. Description: "Automated secret rotation workflow"
+# 5. Copy the token
+
+# Add to GitHub
+Name: PAGERDUTY_API_KEY
+Value: u+your_token_here_abc123xyz
+```
+
+#### 4. PagerDuty Service ID
 ```bash
 # Get Service ID:
 # 1. Go to your PagerDuty service
