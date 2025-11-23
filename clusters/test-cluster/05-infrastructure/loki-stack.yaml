@@ -64,6 +64,16 @@ spec:
         write:
           replicas: 0
         
+        # Disable memcached caches (not needed for small deployment)
+        chunksCache:
+          enabled: false
+        resultsCache:
+          enabled: false
+        
+        # Disable memberlist (not needed for single replica)
+        memberlist:
+          enabled: false
+        
         # Monitoring
         monitoring:
           selfMonitoring:
