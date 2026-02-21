@@ -1,5 +1,8 @@
 FROM node:20-alpine as build
 
+# Upgrade OpenSSL to patch CVE-2025-15467, CVE-2025-69419, CVE-2025-69421
+RUN apk upgrade --no-cache libcrypto3 libssl3
+
 WORKDIR /app
 
 # Add build argument for API URL
@@ -20,6 +23,9 @@ RUN npm run build
 RUN npm prune --production
 
 FROM nginx:alpine
+
+# Upgrade OpenSSL to patch CVE-2025-15467, CVE-2025-69419, CVE-2025-69421
+RUN apk upgrade --no-cache libcrypto3 libssl3
 
 # Create non-root user for nginx
 RUN addgroup -g 1000 appuser && \

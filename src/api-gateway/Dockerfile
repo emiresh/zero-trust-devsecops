@@ -1,7 +1,8 @@
 FROM node:18-alpine
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and upgrade OpenSSL to patch CVE-2025-15467, CVE-2025-69419, CVE-2025-69421
+RUN apk add --no-cache dumb-init && \
+    apk upgrade --no-cache libcrypto3 libssl3
 
 WORKDIR /app
 
