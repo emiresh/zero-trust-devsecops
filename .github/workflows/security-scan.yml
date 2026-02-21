@@ -336,7 +336,11 @@ jobs:
         run: |
           cd src/${{ matrix.service }}
           echo "📦 Installing dependencies for ${{ matrix.service }}..."
-          npm ci --prefer-offline --no-audit
+          if [ -f package-lock.json ]; then
+            npm ci --prefer-offline --no-audit
+          else
+            npm install --prefer-offline --no-audit
+          fi
 
       - name: Run npm audit
         run: |
