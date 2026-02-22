@@ -22,7 +22,7 @@ permissions:
   pull-requests: write
 
 env:
-  TF_VERSION: '1.5.0'
+  TF_VERSION: '1.14.0'  # Upgraded for OCI backend support
   # OCI Provider Configuration
   TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
   TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
@@ -45,6 +45,10 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          # Optional: Uncomment for Terraform Cloud/Enterprise
+          # cli_config_credentials_hostname: app.terraform.io
+          # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_wrapper: true
 
       - name: Terraform Format Check
         id: fmt
