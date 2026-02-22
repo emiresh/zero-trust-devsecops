@@ -9,6 +9,9 @@ on:
     paths:
       - 'src/**'
       - 'apps/*/templates/**'
+      - 'terraform/**'
+      - 'policies/**'
+      - 'clusters/**'
       - 'Dockerfile'
       - '.github/workflows/ci-cd.yml'
     tags:
@@ -20,6 +23,9 @@ on:
     paths:
       - 'src/**'
       - 'apps/*/templates/**'
+      - 'terraform/**'
+      - 'policies/**'
+      - 'clusters/**'
       - 'Dockerfile'
       - '.github/workflows/ci-cd.yml'
   workflow_dispatch:
