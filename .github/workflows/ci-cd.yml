@@ -301,71 +301,94 @@ jobs:
 
       - name: Scan Infrastructure as Code with Checkov (IaC Security)
         id: checkov
-        continue-on-error: true  # Capture results even with failures
+        continue-on-error: false  # Fail on security issues
         run: |
-          echo "Running Checkov IaC security scanning..."
+          echo "🔍 Running Checkov IaC security scanning..."
+          echo ""
           
           # Install checkov if not available
           pip install checkov >/dev/null 2>&1 || true
           
-          # Run Checkov with both console and SARIF output
+          # Run Checkov scan
+          echo "Scanning infrastructure as code..."
           checkov -d . \
-            --framework kubernetes terraform dockerfile \
+            --framework terraform \
+            --skip-path test-pod.yaml,test-pvc.yaml,Future/,.terraform/ \
+            --output cli \
+            --compact \
+            2>&1 | tee /tmp/checkov-output.txt || true
+          
+          # Also scan Kubernetes and Dockerfiles separately
+          checkov -d . \
+            --framework kubernetes dockerfile \
             --skip-check CKV_K8S_43,CKV_K8S_35 \
             --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
             --output cli \
             --compact \
-            2>&1 | tee /tmp/checkov-output.txt
+            2>&1 | tee -a /tmp/checkov-output.txt || true
           
-          # Generate SARIF file separately for upload
+          # Generate SARIF file for GitHub Security tab
           checkov -d . \
             --framework kubernetes terraform dockerfile \
             --skip-check CKV_K8S_43,CKV_K8S_35 \
-            --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
+            --skip-path test-pod.yaml,test-pvc.yaml,Future/,.terraform/ \
             --output sarif \
             --output-file-path . \
             >/dev/null 2>&1 || true
           
-          # Store exit code
-          CHECKOV_EXIT=$?
+          echo ""
+          echo "📊 Analyzing results..."
           
-          # Parse the summary line - Checkov outputs like "Passed checks: 266, Failed checks: 3, Skipped checks: 0"
-          SUMMARY=$(grep -E "^(kubernetes|terraform|dockerfile) scan results:" -A 2 /tmp/checkov-output.txt | tail -1)
+          # Count failures more reliably
+          FAILED=$(grep -c "FAILED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+          PASSED=$(grep -c "PASSED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
           
-          # Extract numbers - looking for pattern "Passed checks: X, Failed checks: Y, Skipped checks: Z"
-          PASSED=$(echo "$SUMMARY" | grep -oP 'Passed checks:\s*\K\d+' || echo "0")
-          FAILED=$(echo "$SUMMARY" | grep -oP 'Failed checks:\s*\K\d+' || echo "0")
-          SKIPPED=$(echo "$SUMMARY" | grep -oP 'Skipped checks:\s*\K\d+' || echo "0")
-          
-          # Fallback: if parsing failed, try to count from full output
-          if [ "$PASSED" = "0" ] && [ "$FAILED" = "0" ]; then
-            PASSED=$(grep -c "Check: CKV" /tmp/checkov-output.txt 2>/dev/null || echo "0")
-            FAILED=$(grep -c "FAILED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+          # Also check for "Failed checks:" in summary
+          FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | grep -oE '[0-9]+' | head -1 || echo "0")
+          if [ "$FAILED_SUMMARY" -gt "$FAILED" ]; then
+            FAILED=$FAILED_SUMMARY
           fi
           
-          # Output for next step
+          # Output for next steps
           echo "CHECKOV_PASSED=$PASSED" >> $GITHUB_OUTPUT
           echo "CHECKOV_FAILED=$FAILED" >> $GITHUB_OUTPUT
-          echo "CHECKOV_SKIPPED=$SKIPPED" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "Results: Passed=$PASSED, Failed=$FAILED"
           
           # GitHub Summary
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🔍 Checkov IaC Security Scanning
+          
           **Infrastructure as Code:** Kubernetes, Terraform, and Dockerfile security validation
           
-          | ✅ Passed | ❌ Failed | ⏭️ Skipped |
-          |----------|---------|-----------|
-          | $PASSED | $FAILED | $SKIPPED |
+          | ✅ Passed | ❌ Failed |
+          |----------|---------|
+          | $PASSED | $FAILED |
           
           EOF
           
           if [ "$FAILED" -gt "0" ]; then
-            echo "⚠️ **Action Required:** $FAILED security issues found!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Review the detailed output above for specific violations and remediation guidance." >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Security Issues Detected!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**$FAILED security violations found in infrastructure code.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Review the job logs above for detailed findings and remediation guidance." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>📋 View Failed Checks</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            grep "FAILED for resource:" /tmp/checkov-output.txt | head -20 >> $GITHUB_STEP_SUMMARY || true
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "❌ Checkov scan failed with $FAILED security issues!"
             exit 1
           else
             echo "✅ All Checkov security checks passed!" >> $GITHUB_STEP_SUMMARY
+            echo "✅ No security issues found!"
           fi
 
       - name: Upload Checkov Results as Artifact
