@@ -1,0 +1,9 @@
+# Gitleaks ignore file for false positives
+# https://github.com/gitleaks/gitleaks#gitleaksignore
+
+# ArgoCD values file - contains commented example SSH keys (not real secrets)
+values-argo-cd.yaml:private-key:621
+values-argo-cd.yaml:private-key:631
+
+# Documentation and example files
+# Add other false positives here as needed
