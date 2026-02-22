@@ -309,29 +309,27 @@ jobs:
           # Install checkov if not available
           pip install checkov >/dev/null 2>&1 || true
           
-          # Run Checkov scan
+          # Run Checkov scan with config file
           echo "Scanning infrastructure as code..."
           checkov -d . \
+            --config-file .checkov.yaml \
             --framework terraform \
-            --skip-path test-pod.yaml,test-pvc.yaml,Future/,.terraform/ \
             --output cli \
             --compact \
             2>&1 | tee /tmp/checkov-output.txt || true
           
           # Also scan Kubernetes and Dockerfiles separately
           checkov -d . \
+            --config-file .checkov.yaml \
             --framework kubernetes dockerfile \
-            --skip-check CKV_K8S_43,CKV_K8S_35 \
-            --skip-path test-pod.yaml,test-pvc.yaml,Future/ \
             --output cli \
             --compact \
             2>&1 | tee -a /tmp/checkov-output.txt || true
           
           # Generate SARIF file for GitHub Security tab
           checkov -d . \
+            --config-file .checkov.yaml \
             --framework kubernetes terraform dockerfile \
-            --skip-check CKV_K8S_43,CKV_K8S_35 \
-            --skip-path test-pod.yaml,test-pvc.yaml,Future/,.terraform/ \
             --output sarif \
             --output-file-path . \
             >/dev/null 2>&1 || true
