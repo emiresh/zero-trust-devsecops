@@ -259,9 +259,18 @@ jobs:
           CHANGES=$(grep -c "will be updated" /tmp/plan-output.txt || echo "0")
           DESTROYS=$(grep -c "will be destroyed" /tmp/plan-output.txt || echo "0")
           
-          echo "plan_adds=$ADDS" >> $GITHUB_OUTPUT
-          echo "plan_changes=$CHANGES" >> $GITHUB_OUTPUT
-          echo "plan_destroys=$DESTROYS" >> $GITHUB_OUTPUT
+          # Use multiline format for outputs to avoid format errors
+          {
+            echo "plan_adds<<EOF"
+            echo "$ADDS"
+            echo "EOF"
+            echo "plan_changes<<EOF"
+            echo "$CHANGES"
+            echo "EOF"
+            echo "plan_destroys<<EOF"
+            echo "$DESTROYS"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
