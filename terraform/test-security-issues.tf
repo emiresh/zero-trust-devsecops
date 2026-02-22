@@ -101,6 +101,6 @@ resource "oci_core_instance" "test_insecure_instance" {
     assign_public_ip = true  # BAD: Public IP without proper security
   }
   
-  # BAD: No metadata for security monitoring.
+  # BAD: No metadata for security monitoring
   # metadata = {}
 }
