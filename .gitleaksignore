@@ -5,5 +5,11 @@
 values-argo-cd.yaml:private-key:621
 values-argo-cd.yaml:private-key:631
 
+# Gitleaks output file (generated during pipeline runs - contains example findings)
+gitleaks-output.txt:aws-access-token:33
+
+# README.md - contains example/fake credentials for documentation
+README.md:sidekiq-secret:42
+
 # Documentation and example files
 # Add other false positives here as needed
