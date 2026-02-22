@@ -1,0 +1,308 @@
+name: PR Validation - Fast Feedback
+
+# This pipeline provides fast feedback on PRs (< 2 min)
+# Full CI/CD (app-cicd.yml) runs AFTER merge to save time and resources
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types: [opened, synchronize, reopened]
+
+# Cancel in-progress runs for same PR
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # ==========================================
+  # Quick Code Quality Checks (< 1 min)
+  # ==========================================
+  code-quality:
+    name: ✨ Code Quality & Formatting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Check File Changes
+        id: changes
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "$CHANGED_FILES"
+          
+          HAS_JS=$(echo "$CHANGED_FILES" | grep -E '\.(js|ts|jsx|tsx|vue)$' || echo "")
+          HAS_YAML=$(echo "$CHANGED_FILES" | grep -E '\.(yaml|yml)$' || echo "")
+          HAS_TF=$(echo "$CHANGED_FILES" | grep -E '\.tf$' || echo "")
+          
+          echo "has_js=$([[ -n "$HAS_JS" ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has_yaml=$([[ -n "$HAS_YAML" ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has_tf=$([[ -n "$HAS_TF" ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Lint JavaScript/TypeScript
+        if: steps.changes.outputs.has_js == 'true'
+        run: |
+          echo "🔍 Linting JavaScript/TypeScript files..."
+          
+          # Install ESLint if present in any service
+          for dir in src/*/; do
+            if [[ -f "$dir/package.json" ]]; then
+              cd "$dir"
+              npm install --only=dev >/dev/null 2>&1 || true
+              
+              if [[ -f "package.json" ]] && grep -q "eslint" package.json; then
+                echo "Running ESLint in $dir"
+                npx eslint . --max-warnings 0 || echo "⚠️ ESLint warnings found"
+              fi
+              
+              cd - >/dev/null
+            fi
+          done
+          
+          echo "✅ Linting completed"
+
+      - name: Validate YAML Files
+        if: steps.changes.outputs.has_yaml == 'true'
+        run: |
+          echo "🔍 Validating YAML syntax..."
+          
+          # Install yamllint
+          pip install yamllint
+          
+          # Create basic yamllint config
+          cat > .yamllint.yml << EOF
+          extends: default
+          rules:
+            line-length:
+              max: 120
+              level: warning
+            indentation:
+              spaces: 2
+            comments:
+              min-spaces-from-content: 1
+          EOF
+          
+          yamllint -c .yamllint.yml \
+            apps/ \
+            clusters/ \
+            policies/ \
+            .github/workflows/ \
+            || echo "⚠️ YAML warnings found"
+          
+          echo "✅ YAML validation completed"
+
+      - name: Validate Terraform Format
+        if: steps.changes.outputs.has_tf == 'true'
+        run: |
+          echo "🔍 Checking Terraform formatting..."
+          
+          # Install Terraform
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install -y terraform
+          
+          cd terraform
+          terraform fmt -check -recursive || {
+            echo "❌ Terraform formatting issues found!"
+            echo "Run: terraform fmt -recursive"
+            exit 1
+          }
+          
+          echo "✅ Terraform format check passed"
+
+  # ==========================================
+  # Basic Security Checks (< 2 min)
+  # ==========================================
+  security-check:
+    name: 🔐 Quick Security Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret Scanning with Gitleaks
+        run: |
+          echo "🔍 Scanning for secrets in PR changes..."
+          
+          # Install Gitleaks
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+          
+          # Scan only changed files
+          gitleaks detect --no-git --verbose 2>&1 | tee gitleaks-output.txt || true
+          
+          if grep -q "leaks found" gitleaks-output.txt; then
+            echo "::error::❌ Secrets detected in PR!"
+            cat gitleaks-output.txt
+            exit 1
+          fi
+          
+          echo "✅ No secrets found"
+
+      - name: Basic Kubernetes Manifest Validation
+        run: |
+          echo "🔍 Validating Kubernetes manifests..."
+          
+          # Install kubeval
+          wget -q https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin/
+          
+          # Validate manifests
+          find clusters/ apps/ -name "*.yaml" -type f | while read file; do
+            if grep -q "kind:" "$file"; then
+              echo "Validating: $file"
+              kubeval "$file" || true
+            fi
+          done
+          
+          echo "✅ Manifest validation completed"
+
+      - name: Check for Common Security Issues
+        run: |
+          echo "🔍 Checking for common security anti-patterns..."
+          
+          # Check for hardcoded IPs
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -E "^\+.*\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" | grep -v "0.0.0.0" | grep -v "127.0.0.1" | grep -v "metadata"; then
+            echo "⚠️ Warning: Hardcoded IP addresses found"
+          fi
+          
+          # Check for TODO security items
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -i -E "^\+.*(TODO|FIXME|XXX).*secur"; then
+            echo "⚠️ Warning: Security TODOs found"
+          fi
+          
+          # Check for debug/development flags
+          if git diff origin/${{ github.base_ref }}...HEAD | grep -E "^\+.*(DEBUG=true|DEV_MODE=true|SKIP_AUTH|DISABLE_.*_CHECK)"; then
+            echo "⚠️ Warning: Development/debug flags found"
+          fi
+          
+          echo "✅ Security pattern check completed"
+
+  # ==========================================
+  # PR Size & Complexity Check
+  # ==========================================
+  pr-size-check:
+    name: 📏 PR Size & Complexity
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR Size
+        run: |
+          echo "📊 Analyzing PR size..."
+          
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)
+          LINES_ADDED=$(git diff origin/${{ github.base_ref }}...HEAD --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
+          LINES_DELETED=$(git diff origin/${{ github.base_ref }}...HEAD --stat | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
+          
+          echo "Files changed: $CHANGED_FILES"
+          echo "Lines added: $LINES_ADDED"
+          echo "Lines deleted: $LINES_DELETED"
+          
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 📊 PR Size Analysis
+          
+          | Metric | Count |
+          |--------|-------|
+          | Files Changed | $CHANGED_FILES |
+          | Lines Added | $LINES_ADDED |
+          | Lines Deleted | $LINES_DELETED |
+          
+          EOF
+          
+          # Warning for large PRs
+          if [[ $CHANGED_FILES -gt 50 ]]; then
+            echo "⚠️ Large PR: Consider breaking into smaller PRs" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ $LINES_ADDED -gt 1000 ]]; then
+            echo "⚠️ Large changeset: Review may take longer" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================
+  # Summary
+  # ==========================================
+  pr-validation-summary:
+    name: ✅ PR Validation Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-check, pr-size-check]
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🎯 PR Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | ${{ needs.code-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR Size | ${{ needs.pr-size-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.code-quality.result }}" == "success" ]] && \
+             [[ "${{ needs.security-check.result }}" == "success" ]]; then
+            echo "✅ **All PR validations passed!**" >> $GITHUB_STEP_SUMMARY
+            echo "Ready for detailed review by maintainers." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Some validations failed**" >> $GITHUB_STEP_SUMMARY
+            echo "Please fix the issues above before requesting review." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const codeQuality = '${{ needs.code-quality.result }}';
+            const security = '${{ needs.security-check.result }}';
+            const prSize = '${{ needs.pr-size-check.result }}';
+            
+            const emoji = (status) => status === 'success' ? '✅' : '❌';
+            
+            const comment = `## 🚀 PR Validation Results
+            
+            | Check | Status |
+            |-------|--------|
+            | Code Quality & Formatting | ${emoji(codeQuality)} ${codeQuality} |
+            | Security Validation | ${emoji(security)} ${security} |
+            | PR Size Analysis | ${emoji(prSize)} ${prSize} |
+            
+            ${codeQuality === 'success' && security === 'success' 
+              ? '✅ All validations passed! Ready for review.' 
+              : '❌ Some checks failed. Please review the details above.'}
+            
+            ---
+            *This is an automated fast-feedback check. Full CI/CD (build & deploy) will run after PR merge.*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

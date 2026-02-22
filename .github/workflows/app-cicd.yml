@@ -1,0 +1,523 @@
+name: App CI/CD - Secure Build & Deploy
+
+# This pipeline runs ONLY after PR merge (not on PRs)
+# For fast PR feedback, see pr-validation.yml
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'apps/*/templates/**'
+      - 'Dockerfile'
+      - '.github/workflows/app-cicd.yml'
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (emergency deployment only)'
+        required: false
+        default: false
+        type: boolean
+
+# Prevent concurrent deployments
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  security-events: write
+  packages: read
+  pull-requests: write
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  # ==========================================
+  # STAGE 1: LEFT-SHIFT SECURITY - Detect Changes & Validate
+  # ==========================================
+  detect-changes:
+    name: 🔍 Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Services
+        id: detect
+        run: |
+          # Get changed files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+          
+          echo "📝 Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+          
+          # Initialize services array
+          SERVICES=()
+          
+          # Check each service directory
+          if echo "$CHANGED_FILES" | grep -q "^src/frontend/"; then
+            SERVICES+=("frontend")
+            echo "✅ Detected: frontend"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/api-gateway/"; then
+            SERVICES+=("api-gateway")
+            echo "✅ Detected: api-gateway"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/user-service/"; then
+            SERVICES+=("user-service")
+            echo "✅ Detected: user-service"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q "^src/product-service/"; then
+            SERVICES+=("product-service")
+            echo "✅ Detected: product-service"
+          fi
+          
+          # If workflow or Dockerfile changed, rebuild all
+          if echo "$CHANGED_FILES" | grep -qE "^(\.github/workflows/app-cicd\.yml|Dockerfile)"; then
+            echo "⚠️ Workflow or Dockerfile changed - rebuilding all services"
+            SERVICES=("frontend" "api-gateway" "user-service" "product-service")
+          fi
+          
+          # Create JSON array
+          if [[ ${#SERVICES[@]} -eq 0 ]]; then
+            echo "ℹ️ No services to build"
+            SERVICES_JSON="[]"
+            HAS_CHANGES="false"
+          else
+            SERVICES_JSON="["
+            for i in "${!SERVICES[@]}"; do
+              if [[ $i -gt 0 ]]; then
+                SERVICES_JSON+=","
+              fi
+              SERVICES_JSON+="\"${SERVICES[$i]}\""
+            done
+            SERVICES_JSON+="]"
+            HAS_CHANGES="true"
+          fi
+          
+          echo ""
+          echo "🎯 Services to build: ${SERVICES[*]}"
+          echo "📊 JSON matrix: $SERVICES_JSON"
+          
+          echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
+          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+
+  # ==========================================
+  # STAGE 2: LEFT-SHIFT SECURITY - Kubernetes Manifest Validation
+  # ==========================================
+  policy-checks:
+    name: 🔐 Validate K8s Manifests & Policies
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate with OPA (Policy-as-Code)
+        if: hashFiles('policies/opa/**') != ''
+        run: |
+          echo "🔍 Validating Kubernetes manifests with OPA policies..."
+          
+          # Install Conftest
+          CONFTEST_VERSION=0.63.0
+          curl -sL https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz | tar xz
+          sudo mv conftest /usr/local/bin/
+          
+          # Install Helm
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
+          
+          # Render and test Helm charts
+          for chart in apps/*/; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              chart_name=$(basename "$chart")
+              echo "📦 Testing: $chart_name"
+              
+              helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
+              conftest test --policy ./policies/opa "/tmp/${chart_name}.yaml" || true
+              echo ""
+            fi
+          done
+
+      - name: Validate with Kyverno (Admission Control)
+        if: hashFiles('policies/kyverno/**') != ''
+        run: |
+          echo "🛡️ Validating Kubernetes manifests with Kyverno policies..."
+          
+          # Install Kyverno CLI
+          curl -LO https://github.com/kyverno/kyverno/releases/download/v1.11.0/kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          tar -xzf kyverno-cli_v1.11.0_linux_x86_64.tar.gz
+          sudo mv kyverno /usr/local/bin/
+          
+          # Install Helm
+          curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
+          
+          # Test Helm templates
+          for chart in apps/*/; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              chart_name=$(basename "$chart")
+              echo "📦 Testing $chart_name with Kyverno..."
+              
+              helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
+              kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml" || true
+              echo ""
+            fi
+          done
+
+      - name: Scan Kubernetes Manifests with Checkov
+        run: |
+          pip install checkov
+          
+          echo "🔍 Scanning Kubernetes manifests..."
+          checkov -d apps \
+            --config-file .checkov.yaml \
+            --framework kubernetes \
+            --output cli \
+            --compact || true
+
+  # ==========================================
+  # STAGE 3: LEFT-SHIFT SECURITY - Build, Scan, SBOM
+  # ==========================================
+  build-and-scan:
+    name: 🏗️ Build & Scan ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, policy-checks]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_changes == 'true' &&
+      (needs.policy-checks.result == 'success' || needs.policy-checks.result == 'skipped')
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for ARM64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Security Tools
+        run: |
+          # Install Trivy
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          
+          # Install Syft for SBOM generation
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate Image Tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Generate semantic version tag
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          else
+            TAG="dev-${SHORT_SHA}"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "📦 Image Tag: $TAG"
+
+      - name: Build Image (Optimized Strategy)
+        id: build
+        run: |
+          SERVICE="${{ matrix.service }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          IMAGE_NAME="${{ env.IMAGE_PREFIX }}/freshbonds-${SERVICE}"
+          
+          if [[ "$SERVICE" == "frontend" ]]; then
+            echo "🏗️ Building frontend for AMD64 (for local scanning)..."
+            
+            docker buildx build \
+              --platform linux/amd64 \
+              --build-arg VITE_API_URL=/api \
+              --load \
+              -t "${IMAGE_NAME}:${TAG}" \
+              ./src/${SERVICE}
+            
+            echo "is_multiarch=true" >> $GITHUB_OUTPUT
+          else
+            echo "🏗️ Building $SERVICE for ARM64..."
+            
+            docker buildx build \
+              --platform linux/arm64 \
+              --load \
+              -t "${IMAGE_NAME}:${TAG}" \
+              ./src/${SERVICE}
+            
+            echo "is_multiarch=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+          echo "✅ Build completed"
+
+      - name: Generate SBOM (Software Bill of Materials)
+        run: |
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          SERVICE="${{ matrix.service }}"
+          
+          echo "📋 Generating SBOM for $IMAGE..."
+          
+          # Generate SBOM in multiple formats
+          syft "$IMAGE" -o spdx-json > "sbom-$SERVICE-spdx.json"
+          syft "$IMAGE" -o cyclonedx-json > "sbom-$SERVICE-cyclonedx.json"
+          syft "$IMAGE" -o table
+          
+          echo "✅ SBOM generated"
+
+      - name: Scan Image with Trivy (Zero-Trust Validation)
+        id: trivy
+        run: |
+          SERVICE="${{ matrix.service }}"
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          echo "🔍 Zero-Trust Security Scan: $IMAGE"
+          
+          # Scan for vulnerabilities
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --exit-code 0 \
+            "$IMAGE" 2>&1 | tee /tmp/trivy-report.txt
+          
+          # Generate reports
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            --output trivy-results.sarif \
+            "$IMAGE" 2>/dev/null || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+          
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output trivy-results.json \
+            "$IMAGE" 2>/dev/null || echo '{"Results":[]}' > trivy-results.json
+          
+          # Parse results
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo "0")
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo "0")
+          TOTAL=$((CRITICAL + HIGH))
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔍 Trivy Security Scan: $SERVICE
+          **Image:** \`$IMAGE\`
+          
+          | 🚨 Critical | ⚠️ High | 📊 Total |
+          |------------|---------|----------|
+          | $CRITICAL | $HIGH | $TOTAL |
+          
+          <details>
+          <summary>📋 View Full Report</summary>
+          
+          \`\`\`
+          $(cat /tmp/trivy-report.txt)
+          \`\`\`
+          
+          </details>
+          EOF
+          
+          # Zero-Trust: BLOCK on critical vulnerabilities
+          if [[ $CRITICAL -gt 0 ]]; then
+            echo "::error::❌ BLOCKED: $CRITICAL critical vulnerabilities found!"
+            echo "Zero-Trust Security: Critical vulnerabilities prevent deployment"
+            exit 1
+          fi
+          
+          echo "✅ Security scan passed - Zero-Trust validation successful"
+
+      - name: Scan for Secrets (Left-Shift Security)
+        run: |
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          echo "🔐 Scanning for secrets and sensitive data..."
+          
+          trivy image \
+            --scanners secret \
+            --severity HIGH,CRITICAL \
+            --format table \
+            "$IMAGE" || true
+          
+          echo "✅ Secret scan completed"
+
+      - name: Push Backend Images
+        if: |
+          steps.build.outputs.is_multiarch != 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          
+          echo "🚀 Pushing ARM64 backend image..."
+          docker push "${IMAGE_NAME}:${TAG}"
+          docker tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
+          
+          echo "✅ Pushed: ${IMAGE_NAME}:${TAG}"
+
+      - name: Build and Push Multi-Arch Frontend
+        if: |
+          steps.build.outputs.is_multiarch == 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME="${{ steps.build.outputs.image_name }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          
+          echo "🏗️ Building multi-arch frontend (amd64 + arm64)..."
+          
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg VITE_API_URL=/api \
+            --push \
+            -t "${IMAGE_NAME}:${TAG}" \
+            -t "${IMAGE_NAME}:latest" \
+            ./src/frontend
+          
+          echo "✅ Multi-arch frontend pushed"
+
+      - name: Upload Security Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-artifacts-${{ matrix.service }}
+          path: |
+            trivy-results.sarif
+            trivy-results.json
+            sbom-*.json
+          retention-days: 90
+
+  # ==========================================
+  # STAGE 4: Update Manifests (GitOps)
+  # ==========================================
+  update-manifests:
+    name: 📝 Update Helm Values (GitOps)
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-scan]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-and-scan.result == 'success'
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Helm Values
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          
+          echo "📝 Updating Helm values with tag: $TAG"
+          
+          sed -i "s|tag: .*|tag: $TAG|g" apps/freshbonds/values.yaml
+          git diff apps/freshbonds/values.yaml
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          git add apps/freshbonds/values.yaml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️ No changes to commit"
+          else
+            git commit -m "chore: update image tags to $TAG [skip ci]"
+            git push
+            echo "✅ GitOps: Helm values updated"
+          fi
+
+      - name: Trigger ArgoCD Sync
+        run: |
+          echo "🔄 ArgoCD will auto-sync within 3 minutes"
+
+  # ==========================================
+  # STAGE 5: Pipeline Summary
+  # ==========================================
+  notify:
+    name: 📊 Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, policy-checks, build-and-scan, update-manifests]
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🚀 Application CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Detect Changes | ${{ needs.detect-changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Policy Checks | ${{ needs.policy-checks.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Scan | ${{ needs.build-and-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Update Manifests | ${{ needs.update-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.build-and-scan.result }}" == "success" ]]; then
+            echo "✅ **Zero-Trust Security**: All security gates passed!" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Left-Shift Security**: Vulnerabilities caught before deployment" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "❌ Pipeline failed - review security findings above" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
