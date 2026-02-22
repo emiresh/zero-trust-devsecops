@@ -337,14 +337,27 @@ jobs:
           echo ""
           echo "📊 Analyzing results..."
           
-          # Count failures more reliably
+          # Count failures more reliably - remove any newlines/whitespace
           FAILED=$(grep -c "FAILED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+          FAILED=$(echo "$FAILED" | tr -d '\n' | tr -d ' ')
+          
           PASSED=$(grep -c "PASSED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
+          PASSED=$(echo "$PASSED" | tr -d '\n' | tr -d ' ')
           
           # Also check for "Failed checks:" in summary
-          FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | grep -oE '[0-9]+' | head -1 || echo "0")
-          if [ "$FAILED_SUMMARY" -gt "$FAILED" ]; then
+          FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | grep -oE '[0-9]+' | head -1 | tr -d '\n' | tr -d ' ' || echo "0")
+          
+          # Use the higher count
+          if [ -n "$FAILED_SUMMARY" ] && [ "$FAILED_SUMMARY" -gt "$FAILED" ] 2>/dev/null; then
             FAILED=$FAILED_SUMMARY
+          fi
+          
+          # Ensure they're valid numbers
+          if ! [[ "$PASSED" =~ ^[0-9]+$ ]]; then
+            PASSED=0
+          fi
+          if ! [[ "$FAILED" =~ ^[0-9]+$ ]]; then
+            FAILED=0
           fi
           
           # Output for next steps

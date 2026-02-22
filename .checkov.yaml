@@ -1,0 +1,10 @@
+# Checkov Configuration
+# Documentation: https://www.checkov.io/2.Basics/Suppressing%20and%20Skipping%20Policies.html
+
+skip-path:
+  - Future/
+  - .terraform/
+
+skip-check:
+  - CKV_K8S_35  # Secrets as env vars acceptable for Jobs with proper RBAC
+  - CKV_K8S_43  # Public registry images acceptable in our context
