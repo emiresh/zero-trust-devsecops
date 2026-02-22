@@ -38,7 +38,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          # cache disabled - no lock files in repository
 
       - name: Check File Changes
         id: changes
@@ -142,15 +142,23 @@ jobs:
         run: |
           echo "🔍 Scanning for secrets in PR changes..."
           
-          # Install Gitleaks
-          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+          # Install Gitleaks (latest version)
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz
+          tar -xzf gitleaks_8.30.0_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
           
-          # Scan only changed files
+          # Verify .gitleaksignore exists
+          if [ -f .gitleaksignore ]; then
+            echo "✅ Found .gitleaksignore with $(wc -l < .gitleaksignore) entries"
+          else
+            echo "⚠️ .gitleaksignore not found!"
+          fi
+          
+          # Scan (automatically uses .gitleaksignore in repo root)
           gitleaks detect --no-git --verbose 2>&1 | tee gitleaks-output.txt || true
           
-          if grep -q "leaks found" gitleaks-output.txt; then
+          # Check for actual leaks (not "no leaks found")
+          if grep -qE "WRN leaks found: [1-9]" gitleaks-output.txt; then
             echo "::error::❌ Secrets detected in PR!"
             cat gitleaks-output.txt
             exit 1

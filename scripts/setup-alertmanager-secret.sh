@@ -4,7 +4,15 @@
 
 set -e
 
-WEBHOOK_URL="https://hooks.slack.com/services/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"
+# Read webhook URL from environment variable or prompt
+if [ -z "$SLACK_WEBHOOK_URL" ]; then
+    echo "⚠️  SLACK_WEBHOOK_URL not set"
+    echo "Please provide your Slack webhook URL:"
+    read -r WEBHOOK_URL
+else
+    WEBHOOK_URL="$SLACK_WEBHOOK_URL"
+fi
+
 NAMESPACE="monitoring"
 SECRET_NAME="alertmanager-slack-webhook"
 

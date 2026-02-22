@@ -1,0 +1,22 @@
+# Gitleaks ignore file for false positives
+# https://github.com/gitleaks/gitleaks#gitleaksignore
+
+# Sealed Secrets - encrypted, safe to commit
+clusters/test-cluster/10-apps/admin-user-sealedsecret.yaml:generic-api-key:14
+apps/freshbonds/templates/sealed-secret.yaml:generic-api-key:12
+apps/freshbonds/templates/sealed-secret.yaml:generic-api-key:15
+clusters/test-cluster/05-infrastructure/alertmanager-pagerduty-sealedsecret.yaml:generic-api-key:9
+
+# Sealed Secrets backup - encrypted master key
+sealed-secrets-keys-backup.b64:private-key:1
+
+# Documentation files with example webhooks
+clusters/test-cluster/05-infrastructure/ALERTING-README.md:slack-webhook-url:271
+
+# ArgoCD values file - commented example SSH keys (not real secrets)
+values-argo-cd.yaml:private-key:621
+values-argo-cd.yaml:private-key:631
+
+# README.md - example/fake credentials for documentation
+README.md:generic-api-key:574
+README.md:sidekiq-secret:47

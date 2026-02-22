@@ -22,6 +22,10 @@ dist/
 build/
 *.log
 
+# Security scanning outputs
+gitleaks-output.txt
+trivy-results.json
+
 # IDE
 .vscode/
 .idea/
