@@ -227,9 +227,14 @@ The `bootstrap-app` uses `recurse: true` to automatically manage all YAML files 
 
 ### DevOps
 - [ ] Multi-environment configs (dev/staging/prod)
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Automated testing in pipeline
-- [ ] Image scanning (Trivy/Snyk)
+- [x] **CI/CD pipeline (GitHub Actions)** - 5 specialized pipelines with left-shift security
+- [x] **Automated testing in pipeline** - PR validation, policy checks, security scanning
+- [x] **Image scanning (Trivy)** - Blocks CRITICAL vulnerabilities
+- [x] **IaC scanning (Checkov)** - Validates Terraform/K8s security
+- [x] **Secret scanning (Gitleaks)** - Prevents credential leaks
+- [x] **SBOM generation (Syft)** - Software bill of materials for all images
+- [x] **Monthly security audits** - Automated vulnerability scans
+- [x] **Monthly secret rotation** - JWT, DB credentials, API keys
 - [ ] Backup/restore procedures
 
 ## Troubleshooting
@@ -282,15 +287,159 @@ docker build --build-arg VITE_API_URL=/api -t emiresh/freshbonds-frontend:v1.2.1
 docker push emiresh/freshbonds-frontend:v1.2.1
 ```
 
+## 🚀 CI/CD Pipeline Architecture
+
+This project uses a **5-pipeline architecture** with **left-shift security** and **zero-trust** principles:
+
+### Pipeline Overview
+
+```
+Developer Push → PR Validation (< 2 min)
+                      ↓
+                Code Review
+                      ↓
+              Merge to main
+                      ↓
+          ┌───────────┴────────────┐
+          ↓                        ↓
+  App CI/CD (8-10 min)    Terraform (2-4 min)
+  - Build & SBOM          - Format & Validate
+  - Security Scan         - Checkov IaC Scan
+  - Push Images           - Plan Preview
+  - GitOps Update         - Zero-Trust Gates
+
+       Monthly (1st @ 2-3 AM UTC)
+          ↓                        ↓
+  Security Audit          Secret Rotation
+  - All Images            - JWT Keys
+  - Policies              - DB Passwords
+  - Compliance            - API Keys
+```
+
+### 1️⃣ PR Validation (`pr-validation.yml`) - < 2 min
+**Runs on:** Every pull request  
+**Purpose:** Fast feedback before code review
+
+- ✅ Code linting (ESLint, yamllint)
+- ✅ Secret scanning (Gitleaks)
+- ✅ Terraform format check
+- ✅ K8s manifest validation
+- ✅ Security anti-patterns detection
+- ✅ PR size analysis
+
+**Result:** Automated PR comment with validation status
+
+### 2️⃣ App CI/CD (`app-cicd.yml`) - 8-10 min
+**Runs on:** Push to `main`/`develop` (after PR merge)  
+**Purpose:** Build, scan, and deploy applications
+
+- ✅ OPA & Kyverno policy validation
+- ✅ Docker multi-arch builds (amd64 + arm64)
+- ✅ **SBOM generation** (Syft)
+- ✅ **Trivy security scan** (blocks CRITICAL vulnerabilities)
+- ✅ **Secret scanning** (embedded credentials)
+- ✅ Push to Docker Hub
+- ✅ Update GitOps manifests (`values.yaml`)
+- ✅ ArgoCD auto-sync trigger
+
+**Zero-Trust:** Deployment blocked if:
+- ❌ CRITICAL vulnerabilities found
+- ❌ Policy violations detected
+- ❌ Secrets embedded in images
+
+### 3️⃣ Terraform (`terraform.yml`) - 2-4 min
+**Runs on:** Changes to `terraform/**`  
+**Purpose:** Validate infrastructure as code
+
+- ✅ Terraform format & validate
+- ✅ Checkov IaC security scanning
+- ✅ Plan preview (PR only)
+- ✅ Zero-Trust security gates
+
+### 4️⃣ Security Scan (`security-scan.yml`) - Monthly
+**Schedule:** 1st of month @ 2 AM UTC  
+**Purpose:** Comprehensive security audit
+
+- 🔍 All production images
+- 🔍 Policy compliance
+- 🔍 Dependency scanning
+- 🔍 IaC security audit
+
+### 5️⃣ Secret Rotation (`secret-rotation.yml`) - Monthly
+**Schedule:** 1st of month @ 3 AM UTC  
+**Purpose:** Automated credential rotation
+
+- 🔑 JWT signing keys
+- 🔑 Database passwords
+- 🔑 API keys
+- 🔐 TLS certificates
+
+**Complete Documentation:** See [docs/PIPELINE-ARCHITECTURE.md](docs/PIPELINE-ARCHITECTURE.md)
+
+---
+
 ## Development Workflow
 
-1. **Make code changes** in `src/`
-2. **Build new Docker images** with incremented version tag
-3. **Push images to Docker Hub**
-4. **Update `apps/freshbonds/values.yaml`** with new image tags
-5. **Commit and push to GitHub**
-6. **ArgoCD auto-syncs** (or click "Sync" in UI)
-7. **Kubernetes pulls new images** and updates pods
+### With Automated CI/CD (Current)
+
+1. **Create feature branch**
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+
+2. **Make code changes** in `src/`
+
+3. **Commit and push**
+   ```bash
+   git add .
+   git commit -m "feat: add new feature"
+   git push -u origin feature/my-feature
+   ```
+
+4. **Open Pull Request**
+   - ✅ **PR Validation runs automatically** (< 2 min)
+   - ✅ Checks: linting, secrets, security
+   - ✅ Get automated feedback comment
+
+5. **Code Review & Merge**
+   - Team reviews code
+   - Merge PR to `main`
+
+6. **Automated Deployment** 🚀
+   - ✅ **App CI/CD pipeline triggers automatically**
+   - ✅ Builds Docker images with `v1.0.X` tag
+   - ✅ Scans for vulnerabilities (blocks if CRITICAL)
+   - ✅ Generates SBOM
+   - ✅ Pushes to Docker Hub
+   - ✅ Updates `apps/freshbonds/values.yaml`
+   - ✅ ArgoCD syncs new images to cluster
+   - ✅ Kubernetes rolls out updated pods
+
+7. **Verify deployment**
+   ```bash
+   # Watch pods update
+   kubectl get pods -n dev -w
+   
+   # Check new version
+   kubectl describe pod -n dev -l app=api-gateway | grep Image:
+   ```
+
+**That's it!** No manual image builds, no manual manifest updates. Everything is automated with security gates.
+
+### Manual Override (Emergency Only)
+
+If you need to bypass the pipeline:
+
+```bash
+# Build manually
+./scripts/build-and-push.sh v1.2.1
+
+# Update manifests
+sed -i 's/tag: .*/tag: v1.2.1/' apps/freshbonds/values.yaml
+git add apps/freshbonds/values.yaml
+git commit -m "chore: manual deploy v1.2.1"
+git push
+```
 
 ## Monitoring
 
