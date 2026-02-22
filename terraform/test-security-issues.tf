@@ -101,57 +101,6 @@ resource "oci_core_instance" "test_insecure_instance" {
     assign_public_ip = true  # BAD: Public IP without proper security
   }
   
-  # BAD: No metadata for security monitoring add
+  # BAD: No metadata for security monitoring
   # metadata = {}
-}
-# ISSUE 5: S3 bucket without encryption (Generic Terraform - Checkov will catch)  
-resource "aws_s3_bucket" "test_insecure_bucket" {
-  bucket = "test-insecure-bucket-${random_id.bucket_id.hex}"
-  
-  # Missing: server_side_encryption_configuration
-  # Missing: versioning
-  # Missing: logging
-  
-  tags = {
-    Name        = "insecure-test-bucket"
-    Environment = "test"
-  }
-}
-
-resource "random_id" "bucket_id" {
-  byte_length = 8
-}
-
-# ISSUE 6: S3 bucket with public access
-resource "aws_s3_bucket_public_access_block" "test_public" {
-  bucket = aws_s3_bucket.test_insecure_bucket.id
-  
-  block_public_acls       = false  # BAD: Should be true
-  block_public_policy     = false  # BAD: Should be true
-  ignore_public_acls      = false  # BAD: Should be true
-  restrict_public_buckets = false  # BAD: Should be true
-}
-
-# ISSUE 7: Security group with overly permissive rules
-resource "aws_security_group" "test_insecure_sg" {
-  name        = "test-insecure-sg"
-  description = "Insecure security group for testing"
-  
-  # BAD: SSH from anywhere
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "INSECURE: SSH from anywhere"
-  }
-  
-  # BAD: All traffic outbound (too permissive)
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "INSECURE: All traffic allowed outbound"
-  }
 }
