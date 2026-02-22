@@ -336,27 +336,42 @@ jobs:
           
           echo ""
           echo "📊 Analyzing results..."
+          echo "Debug: Checking /tmp/checkov-output.txt"
+          echo "---"
+          
+          # Show last 50 lines for debugging
+          echo "Last 50 lines of Checkov output:"
+          tail -50 /tmp/checkov-output.txt || true
+          echo "---"
           
           # Count failures more reliably - remove any newlines/whitespace
           FAILED=$(grep -c "FAILED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
           FAILED=$(echo "$FAILED" | tr -d '\n' | tr -d ' ')
+          echo "Debug: FAILED (grep count) = $FAILED"
           
           PASSED=$(grep -c "PASSED for resource:" /tmp/checkov-output.txt 2>/dev/null || echo "0")
           PASSED=$(echo "$PASSED" | tr -d '\n' | tr -d ' ')
+          echo "Debug: PASSED (grep count) = $PASSED"
           
           # Also check for "Failed checks:" in summary
-          FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | grep -oE '[0-9]+' | head -1 | tr -d '\n' | tr -d ' ' || echo "0")
+          FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | head -1 || echo "")
+          echo "Debug: Failed checks line = '$FAILED_SUMMARY'"
+          FAILED_SUMMARY=$(echo "$FAILED_SUMMARY" | grep -oE '[0-9]+' | head -1 | tr -d '\n' | tr -d ' ' || echo "0")
+          echo "Debug: FAILED_SUMMARY (parsed) = $FAILED_SUMMARY"
           
           # Use the higher count
           if [ -n "$FAILED_SUMMARY" ] && [ "$FAILED_SUMMARY" -gt "$FAILED" ] 2>/dev/null; then
+            echo "Debug: Using FAILED_SUMMARY ($FAILED_SUMMARY) instead of grep count ($FAILED)"
             FAILED=$FAILED_SUMMARY
           fi
           
           # Ensure they're valid numbers
           if ! [[ "$PASSED" =~ ^[0-9]+$ ]]; then
+            echo "Debug: PASSED not a valid number, setting to 0"
             PASSED=0
           fi
           if ! [[ "$FAILED" =~ ^[0-9]+$ ]]; then
+            echo "Debug: FAILED not a valid number, setting to 0"
             FAILED=0
           fi
           
