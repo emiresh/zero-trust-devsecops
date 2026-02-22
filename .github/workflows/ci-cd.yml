@@ -356,7 +356,8 @@ jobs:
           # Also check for "Failed checks:" in summary
           FAILED_SUMMARY=$(grep "Failed checks:" /tmp/checkov-output.txt | head -1 || echo "")
           echo "Debug: Failed checks line = '$FAILED_SUMMARY'"
-          FAILED_SUMMARY=$(echo "$FAILED_SUMMARY" | grep -oE '[0-9]+' | head -1 | tr -d '\n' | tr -d ' ' || echo "0")
+          # Extract number specifically AFTER "Failed checks:"
+          FAILED_SUMMARY=$(echo "$FAILED_SUMMARY" | sed -n 's/.*Failed checks: *\([0-9][0-9]*\).*/\1/p' | head -1 | tr -d '\n' | tr -d ' ' || echo "0")
           echo "Debug: FAILED_SUMMARY (parsed) = $FAILED_SUMMARY"
           
           # Use the higher count
