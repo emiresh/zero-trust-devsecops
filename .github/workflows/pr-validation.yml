@@ -157,7 +157,8 @@ jobs:
           # Scan (automatically uses .gitleaksignore in repo root)
           gitleaks detect --no-git --verbose 2>&1 | tee gitleaks-output.txt || true
           
-          if grep -q "leaks found" gitleaks-output.txt; then
+          # Check for actual leaks (not "no leaks found")
+          if grep -qE "WRN leaks found: [1-9]" gitleaks-output.txt; then
             echo "::error::❌ Secrets detected in PR!"
             cat gitleaks-output.txt
             exit 1
