@@ -45,10 +45,8 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-          # Optional: Uncomment for Terraform Cloud/Enterprise
-          # cli_config_credentials_hostname: app.terraform.io
-          # cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-          terraform_wrapper: true
+          # Wrapper disabled - not needed for validation, prevents output parsing errors
+          terraform_wrapper: false
 
       - name: Terraform Format Check
         id: fmt
@@ -149,6 +147,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
       - name: Configure OCI Credentials
         run: |
@@ -222,6 +221,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
       - name: Configure OCI Credentials
         run: |
@@ -325,6 +325,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
       - name: Configure OCI Credentials
         run: |
