@@ -67,6 +67,7 @@ jobs:
     outputs:
       services: ${{ steps.detect.outputs.services }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
+      has_infra_changes: ${{ steps.detect.outputs.has_infra_changes }}
     
     steps:
       - name: Checkout Code
@@ -118,6 +119,13 @@ jobs:
             SERVICES=("frontend" "api-gateway" "user-service" "product-service")
           fi
           
+          # Check for infrastructure changes (terraform, policies, clusters)
+          INFRA_CHANGES="false"
+          if echo "$CHANGED_FILES" | grep -qE "^(terraform/|policies/|clusters/)"; then
+            INFRA_CHANGES="true"
+            echo "🏗️ Infrastructure changes detected (terraform/policies/clusters)"
+          fi
+          
           # Create JSON array
           if [[ ${#SERVICES[@]} -eq 0 ]]; then
             echo "ℹ️ No services to build"
@@ -138,6 +146,7 @@ jobs:
           echo ""
           echo "🎯 Services to build: ${SERVICES[*]}"
           echo "📊 JSON matrix: $SERVICES_JSON"
+          echo "🏗️ Infrastructure changes: $INFRA_CHANGES"
           
           # Validate JSON
           if ! echo "$SERVICES_JSON" | jq empty >/dev/null 2>&1; then
@@ -148,6 +157,7 @@ jobs:
           
           echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+          echo "has_infra_changes=$INFRA_CHANGES" >> $GITHUB_OUTPUT
 
   # ==========================================
   # STAGE 2: Infrastructure Security & Compliance Validation
@@ -156,7 +166,7 @@ jobs:
     name: 🔐 Validate Infrastructure & Security Policies
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: needs.detect-changes.outputs.has_changes == 'true' || needs.detect-changes.outputs.has_infra_changes == 'true'
     
     permissions:
       contents: read
@@ -675,7 +685,8 @@ jobs:
           echo ""
           
           # Overall status
-          if [[ "${{ needs.build-and-scan.result }}" == "success" ]]; then
+          if [[ "${{ needs.build-and-scan.result }}" == "success" ]] || \
+             [[ "${{ needs.policy-checks.result }}" == "success" && "${{ needs.build-and-scan.result }}" == "skipped" ]]; then
             echo "✅ Pipeline completed successfully!"
             exit 0
           else
