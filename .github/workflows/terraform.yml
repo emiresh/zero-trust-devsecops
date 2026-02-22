@@ -21,6 +21,11 @@ permissions:
   security-events: write
   pull-requests: write
 
+# Prevent concurrent terraform runs to avoid state lock conflicts
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel - queue them instead
+
 env:
   TF_VERSION: '1.14.0'  # Upgraded for OCI backend support
   # OCI Provider Configuration
@@ -276,7 +281,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: terraform/tfplan
+          path: |
+            terraform/tfplan
+            terraform/.terraform.lock.hcl
           retention-days: 5
 
       - name: Generate Plan Summary
@@ -368,6 +375,7 @@ jobs:
         run: |
           cd terraform
           echo "🚀 Applying infrastructure changes..."
+          # Apply the exact plan that was reviewed and approved
           terraform apply -auto-approve tfplan
           
           echo "✅ Infrastructure deployment completed!"
