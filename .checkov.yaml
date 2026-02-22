@@ -4,7 +4,7 @@
 skip-path:
   - Future/
   - .terraform/
-  - terraform/test-security-issues.tf
+  # - terraform/test-security-issues.tf
 
 skip-check:
   - CKV_K8S_35  # Secrets as env vars acceptable for Jobs with proper RBAC
