@@ -8,10 +8,7 @@ terraform {
     region    = "ap-mumbai-1"
     
     # State file path (organize by environment)
-    key = "production/kubernetes-cluster/terraform.tfstate"
-
-    # State locking (Terraform 1.14+ feature)
-    enable_locking = true
+    key = "terraform.tfstate"
 
     # Authentication (uses OCI config from pipeline)
     config_file_profile = "DEFAULT"
@@ -25,7 +22,7 @@ terraform {
   required_providers {
     oci = {
       source  = "oracle/oci"
-      version = "~> 5.0"
+      version = "8.2.0"
     }
   }
 }
