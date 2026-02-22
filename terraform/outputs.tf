@@ -1,81 +1,74 @@
-output "instance_id" {
-  description = "OCID of the created instance"
-  value       = oci_core_instance.main.id
-}
-
-output "instance_name" {
-  description = "Display name of the instance"
-  value       = oci_core_instance.main.display_name
-}
-
-output "instance_public_ip" {
-  description = "Public IP address of the instance"
-  value       = oci_core_instance.main.public_ip
-}
-
-output "instance_private_ip" {
-  description = "Private IP address of the instance"
-  value       = oci_core_instance.main.private_ip
-}
-
-output "instance_state" {
-  description = "Current state of the instance"
-  value       = oci_core_instance.main.state
-}
-
+# VCN Outputs
 output "vcn_id" {
   description = "OCID of the VCN"
-  value       = oci_core_vcn.main.id
+  value       = oci_core_vcn.main_vcn.id
 }
 
-output "subnet_id" {
-  description = "OCID of the subnet"
-  value       = oci_core_subnet.main.id
+output "vcn_cidr" {
+  description = "CIDR block of the VCN"
+  value       = oci_core_vcn.main_vcn.cidr_block
 }
 
-output "nsg_id" {
-  description = "OCID of the Network Security Group"
-  value       = oci_core_network_security_group.main.id
+# Subnet Outputs
+output "public_subnet_id" {
+  description = "OCID of the public subnet"
+  value       = oci_core_subnet.public_subnet.id
 }
 
-output "ssh_command" {
-  description = "SSH command to connect to the instance"
-  value       = "ssh ubuntu@${oci_core_instance.main.public_ip}"
+output "private_subnet_id" {
+  description = "OCID of the private subnet"
+  value       = oci_core_subnet.private_subnet.id
 }
 
-output "availability_domain" {
-  description = "Availability domain of the instance"
-  value       = data.oci_identity_availability_domain.ad.name
+# Instance Outputs
+output "control_plane_public_ip" {
+  description = "Public IP of the control plane instance"
+  value       = oci_core_instance.control_plane.public_ip
 }
 
-output "image_id" {
-  description = "OCID of the OS image used"
-  value       = data.oci_core_images.ubuntu_arm.images[0].id
+output "control_plane_private_ip" {
+  description = "Private IP of the control plane instance"
+  value       = oci_core_instance.control_plane.private_ip
 }
 
-output "image_name" {
-  description = "Name of the OS image used"
-  value       = data.oci_core_images.ubuntu_arm.images[0].display_name
+output "worker_1_private_ip" {
+  description = "Private IP of worker-1 instance"
+  value       = oci_core_instance.worker_1.private_ip
 }
 
-output "data_volume_id" {
-  description = "OCID of the data volume (if created)"
-  value       = var.create_data_volume ? oci_core_volume.data[0].id : null
+output "worker_2_private_ip" {
+  description = "Private IP of worker-2 instance"
+  value       = oci_core_instance.worker_2.private_ip
 }
 
-# Output connection details in a formatted way
-output "connection_details" {
-  description = "Connection details for the instance"
+output "instance_ids" {
+  description = "Map of instance names to OCIDs"
   value = {
-    public_ip  = oci_core_instance.main.public_ip
-    private_ip = oci_core_instance.main.private_ip
-    ssh        = "ssh ubuntu@${oci_core_instance.main.public_ip}"
-    instance_name = oci_core_instance.main.display_name
+    control_plane = oci_core_instance.control_plane.id
+    worker_1      = oci_core_instance.worker_1.id
+    worker_2      = oci_core_instance.worker_2.id
   }
 }
 
-# Output useful URLs
-output "console_url" {
-  description = "OCI Console URL for the instance"
-  value       = "https://cloud.oracle.com/compute/instances/${oci_core_instance.main.id}?region=${var.region}"
+# Load Balancer Outputs
+output "load_balancer_id" {
+  description = "OCID of the load balancer"
+  value       = oci_load_balancer_load_balancer.main_lb.id
+}
+
+output "load_balancer_ip" {
+  description = "IP addresses of the load balancer"
+  value       = oci_load_balancer_load_balancer.main_lb.ip_address_details
+}
+
+# Network Gateway Outputs
+output "internet_gateway_id" {
+  description = "OCID of the internet gateway"
+  value       = oci_core_internet_gateway.igw.id
+}
+
+# SSH Connection String
+output "ssh_to_control_plane" {
+  description = "SSH command to connect to control plane"
+  value       = "ssh -i <your-private-key> opc@${oci_core_instance.control_plane.public_ip}"
 }
