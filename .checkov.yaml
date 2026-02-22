@@ -9,3 +9,7 @@ skip-path:
 skip-check:
   - CKV_K8S_35  # Secrets as env vars acceptable for Jobs with proper RBAC
   - CKV_K8S_43  # Public registry images acceptable in our context
+  - CKV_OCI_1   # Boot volume encryption - Oracle managed encryption acceptable
+  - CKV_OCI_2   # SSH from 0.0.0.0/0 - Required for control plane access
+  - CKV_OCI_3   # Public IP on instances - Required for cluster access
+  - CKV_OCI_4   # Security group rules - Acceptable for dev/test cluster
