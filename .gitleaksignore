@@ -18,4 +18,5 @@ values-argo-cd.yaml:private-key:621
 values-argo-cd.yaml:private-key:631
 
 # README.md - example/fake credentials for documentation
-README.md:sidekiq-secret:42
+README.md:generic-api-key:574
+README.md:sidekiq-secret:47
