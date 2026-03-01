@@ -10,20 +10,68 @@ Complete documentation structure for the project including workflows, architectu
 
 ```
 docs/
-├── README.md (this file)
-├── workflows/              # CI/CD Pipeline Documentation
-├── architecture/           # System Architecture
-├── security/              # Security Documentation
-├── monitoring/            # Monitoring & Observability
-├── deployment/            # Deployment Guides
-└── [Legacy Files]         # Historical documentation
+├── README.md (this file)              # Master index
+├── workflows/                         # CI/CD Pipeline Documentation
+│   ├── README.md                      # Workflows overview
+│   ├── APP-CICD-WORKFLOW.md          # Main deployment pipeline
+│   ├── SECRET-ROTATION-WORKFLOW.md    # Secret rotation automation
+│   ├── SECURITY-SCAN-WORKFLOW.md      # Security audits
+│   ├── TERRAFORM-WORKFLOW.md          # Infrastructure pipeline
+│   └── PR-VALIDATION-WORKFLOW.md      # PR validation
+├── architecture/                      # System Architecture
+│   ├── README.md                      # Architecture overview
+│   └── SYSTEM-ARCHITECTURE.md         # ⭐ Complete architecture (START HERE)
+├── security/                          # Security Documentation
+│   ├── README.md                      # Security overview
+│   ├── SECURITY-OVERVIEW.md           # ⭐ Complete security guide (START HERE)
+│   ├── SECURITY-TOOLS.md              # Tools reference
+│   ├── CLUSTER-SECURITY-GUIDE.md      # K8s hardening
+│   ├── FALCO-COMPLETE-GUIDE.md        # Runtime security
+│   └── SEALEDSECRETS-PERMANENT-KEY.md # Key management
+├── monitoring/                        # Monitoring & Observability
+│   ├── README.md                      # Monitoring overview
+│   ├── GRAFANA-APPLICATION-ALERTS.md  # App alerts
+│   ├── GRAFANA-LOG-ALERTS.md          # Log alerts
+│   ├── GRAFANA-LOGIN-ALERTS.md        # Auth monitoring
+│   └── PAGERDUTY-INTEGRATION.md       # Incident management
+└── deployment/                        # Deployment Guides
+│   ├── README.md                      # Deployment overview
+│   ├── DEVELOPMENT-GUIDE.md           # Local development setup
+│   ├── DOCKER-COMPOSE-GUIDE.md        # Docker Compose
+│   ├── DEV-VS-PROD.md                 # Environment differences
+│   ├── QUICK-REFERENCE.md             # Common commands
+│   ├── TERRAFORM-PIPELINE-GUIDE.md    # IaC deployment
+│   └── TERRAFORM-BACKEND-MIGRATION.md # State migration
+└── rotation-logs/                     # Secret Rotation Logs
+    ├── README.md                      # Logs overview
+    └── rotation-history.md            # Rotation audit trail
 ```
+
+---
+
+## � Quick Navigation
+
+### By Directory
+
+- **[Workflows README](./workflows/README.md)** - CI/CD pipeline documentation
+- **[Architecture README](./architecture/README.md)** - System design and infrastructure
+- **[Security README](./security/README.md)** - Security tools, policies, and procedures
+- **[Monitoring README](./monitoring/README.md)** - Observability and alerting
+- **[Deployment README](./deployment/README.md)** - Setup and deployment guides- **[Rotation Logs README](./rotation-logs/README.md)** - Secret rotation audit trail
+### Start Here Documents ⭐
+
+New to the project? Start with these:
+
+1. **[System Architecture](./architecture/SYSTEM-ARCHITECTURE.md)** - Understand the overall system
+2. **[Security Overview](./security/SECURITY-OVERVIEW.md)** - Learn the security model
+3. **[Development Guide](./deployment/DEVELOPMENT-GUIDE.md)** - Set up your local environment
+4. **[Workflows Overview](./workflows/README.md)** - Understand the CI/CD pipelines
 
 ---
 
 ## 🔄 Workflows Documentation
 
-**Location**: [`docs/workflows/`](./workflows/)
+**Location**: [`docs/workflows/`](./workflows/) | **[README](./workflows/README.md)**
 
 Comprehensive documentation for all GitHub Actions workflows:
 
@@ -41,7 +89,7 @@ Comprehensive documentation for all GitHub Actions workflows:
 
 ## 🏗️ Architecture Documentation
 
-**Location**: [`docs/architecture/`](./architecture/)
+**Location**: [`docs/architecture/`](./architecture/) | **[README](./architecture/README.md)**
 
 ### System Architecture
 
@@ -69,7 +117,7 @@ GitOps Flow → Git → GitHub Actions → Docker Hub → ArgoCD → Kubernetes
 
 ## 🔐 Security Documentation
 
-**Location**: [`docs/security/`](./security/)
+**Location**: [`docs/security/`](./security/) | **[README](./security/README.md)**
 
 ### Security Overview
 
@@ -101,7 +149,7 @@ Covers:
 
 ## 📊 Monitoring Documentation
 
-**Location**: [`docs/monitoring/`](./monitoring/)
+**Location**: [`docs/monitoring/`](./monitoring/) | **[README](./monitoring/README.md)**
 
 ### Available Guides
 
@@ -121,7 +169,7 @@ Covers:
 
 ## 🚀 Deployment Documentation
 
-**Location**: [`docs/deployment/`](./deployment/)
+**Location**: [`docs/deployment/`](./deployment/) | **[README](./deployment/README.md)**
 
 ### Guides
 
@@ -133,7 +181,7 @@ Covers:
 
 **Related Files**:
 - [Development Guide](./deployment/DEVELOPMENT-GUIDE.md)
-- [Docker Compose Setup](./deployment/DOCKER-COMPOSE-README.md)
+- [Docker Compose Setup](./deployment/DOCKER-COMPOSE-GUIDE.md)
 - [Dev vs Prod Environments](./deployment/DEV-VS-PROD.md)
 - [Quick Reference](./deployment/QUICK-REFERENCE.md)
 - [Terraform Backend Migration](./deployment/TERRAFORM-BACKEND-MIGRATION.md)
@@ -153,22 +201,23 @@ Covers:
 ### For DevOps Engineers
 
 - **Infrastructure**: [Terraform Workflow](./workflows/TERRAFORM-WORKFLOW.md)
-- **Cluster Security**: [Cluster Security Guide](./CLUSTER-SECURITY-GUIDE.md)
+- **Cluster Security**: [Cluster Security Guide](./security/CLUSTER-SECURITY-GUIDE.md)
 - **Monitoring Setup**: [Monitoring Documentation](./monitoring/)
 - **Incident Response**: [Security Overview - Incident Response](./security/SECURITY-OVERVIEW.md#incident-response)
 
 ### For Security Teams
 
 - **Security Overview**: [Complete Security Guide](./security/SECURITY-OVERVIEW.md)
-- **Security Tools**: [Security Tools Documentation](./SECURITY-TOOLS.md)
+- **Security Tools**: [Security Tools Documentation](./security/SECURITY-TOOLS.md)
 - **Compliance**: [Security Overview - Compliance](./security/SECURITY-OVERVIEW.md#compliance--auditing)
 - **Scans & Reports**: [Security Scan Workflow](./workflows/SECURITY-SCAN-WORKFLOW.md)
 
 ### For Operations
 
 - **Monitoring**: [Monitoring Documentation](./monitoring/)
-- **Alerts**: [PagerDuty Integration](./PAGERDUTY-INTEGRATION.md)
+- **Alerts**: [PagerDuty Integration](./monitoring/PAGERDUTY-INTEGRATION.md)
 - **Secret Rotation**: [Secret Rotation Workflow](./workflows/SECRET-ROTATION-WORKFLOW.md)
+- **Rotation Logs**: [Secret Rotation Logs](./rotation-logs/README.md)
 - **Runbooks**: *(to be created)*
 
 ---
@@ -181,12 +230,10 @@ Covers:
 - [Security Scan Workflow](./workflows/SECURITY-SCAN-WORKFLOW.md)
 - [Terraform Workflow](./workflows/TERRAFORM-WORKFLOW.md)
 - [PR Validation Workflow](./workflows/PR-VALIDATION-WORKFLOW.md)
-- [CI/CD Pipeline Overview](./workflows/CICD-PIPELINE.md)
-- [Pipeline Architecture](./workflows/PIPELINE-ARCHITECTURE.md)
+- [Workflows Overview](./workflows/README.md)
 
 ### Infrastructure
 - [System Architecture](./architecture/SYSTEM-ARCHITECTURE.md)
-- [Project Architecture](./architecture/PROJECT-ARCHITECTURE.md)
 - [Terraform Pipeline Guide](./deployment/TERRAFORM-PIPELINE-GUIDE.md)
 - [Terraform Backend Migration](./deployment/TERRAFORM-BACKEND-MIGRATION.md)
 - [Cluster Security Setup](./security/CLUSTER-SECURITY-GUIDE.md)
@@ -196,25 +243,24 @@ Covers:
 - [Security Tools](./security/SECURITY-TOOLS.md)
 - [Cluster Security Guide](./security/CLUSTER-SECURITY-GUIDE.md)
 - [Sealed Secrets Permanent Key](./security/SEALEDSECRETS-PERMANENT-KEY.md)
-- [Secret Rotation Setup](./security/SECRET-ROTATION-SETUP.md)
 - [Falco Complete Guide](./security/FALCO-COMPLETE-GUIDE.md)
+- [Secret Rotation Logs](./rotation-logs/README.md)
 
 ### Monitoring & Observability
-- [Grafana Application Alerts](./GRAFANA-APPLICATION-ALERTS.md)
-- [Grafana Log Alerts](./GRAFANA-LOG-ALERTS.md)
-- [Grafana Login Alerts](./GRAFANA-LOGIN-ALERTS.md)
-- [PagerDuty Integration](./PAGERDUTY-INTEGRATION.md)
+- [Grafana Application Alerts](./monitoring/GRAFANA-APPLICATION-ALERTS.md)
+- [Grafana Log Alerts](./monitoring/GRAFANA-LOG-ALERTS.md)
+- [Grafana Login Alerts](./monitoring/GRAFANA-LOGIN-ALERTS.md)
+- [PagerDuty Integration](./monitoring/PAGERDUTY-INTEGRATION.md)
 
 ### Development
 - [Development Guide](./deployment/DEVELOPMENT-GUIDE.md)
-- [Docker Compose Setup](./deployment/DOCKER-COMPOSE-README.md)
+- [Docker Compose Setup](./deployment/DOCKER-COMPOSE-GUIDE.md)
 - [Dev vs Prod](./deployment/DEV-VS-PROD.md)
-- [Project Architecture](./architecture/PROJECT-ARCHITECTURE.md)
 
 ### Reference
-- [CI/CD Pipeline Overview](./workflows/CICD-PIPELINE.md)
-- [Pipeline Architecture](./workflows/PIPELINE-ARCHITECTURE.md)
 - [Quick Reference](./deployment/QUICK-REFERENCE.md)
+- [Workflows Overview](./workflows/README.md)
+- [Architecture Overview](./architecture/README.md)
 
 ---
 
@@ -287,8 +333,8 @@ Or Mermaid for complex diagrams (future).
 
 ### For New Developers
 
-1. Read [Development Guide](./DEVELOPMENT-GUIDE.md)
-2. Setup local environment: [Docker Compose Setup](./DOCKER-COMPOSE-README.md)
+1. Read [Development Guide](./deployment/DEVELOPMENT-GUIDE.md)
+2. Setup local environment: [Docker Compose Setup](./deployment/DOCKER-COMPOSE-GUIDE.md)
 3. Understand workflows: [PR Validation](./workflows/PR-VALIDATION-WORKFLOW.md)
 4. Review architecture: [System Architecture](./architecture/SYSTEM-ARCHITECTURE.md)
 

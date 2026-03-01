@@ -4,7 +4,9 @@ This directory contains detailed documentation for all automated workflows in th
 
 ---
 
-## 📋 Available Workflows
+## 📋 Workflow Documentation
+
+Each workflow has comprehensive documentation covering triggers, process flow, configuration, troubleshooting, and best practices.
 
 | Workflow | Purpose | Trigger | Duration |
 |----------|---------|---------|----------|
