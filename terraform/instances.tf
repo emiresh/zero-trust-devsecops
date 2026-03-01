@@ -65,6 +65,10 @@ resource "oci_core_instance" "control_plane" {
     ssh_authorized_keys = var.ssh_public_key
   }
 
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+
   launch_options {
     boot_volume_type                    = local.common_instance_config.launch_options.boot_volume_type
     firmware                            = local.common_instance_config.launch_options.firmware
@@ -115,6 +119,10 @@ resource "oci_core_instance" "worker_1" {
     ssh_authorized_keys = var.ssh_public_key
   }
 
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+
   launch_options {
     boot_volume_type                    = local.common_instance_config.launch_options.boot_volume_type
     firmware                            = local.common_instance_config.launch_options.firmware
@@ -163,6 +171,10 @@ resource "oci_core_instance" "worker_2" {
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
+  }
+
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
   }
 
   launch_options {

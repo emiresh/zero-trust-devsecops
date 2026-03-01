@@ -36,7 +36,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "1"
     source      = "10.0.0.0/16"
     source_type = "CIDR_BLOCK"
-    stateless   = false
+    stateless   = true
 
     icmp_options {
       code = -1
@@ -47,18 +47,20 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "1"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = false
+    stateless   = true
 
     icmp_options {
       code = 4
       type = 3
     }
   }
+  #checkov:skip=CKV_OCI_19:SSH access from internet required for initial setup
   ingress_security_rules {
+    description = "SSH from anywhere (temporary)"
     protocol    = "6"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = false
+    stateless   = true
 
     tcp_options {
       max = 22
@@ -69,7 +71,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "6"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = false
+    stateless   = true
 
     tcp_options {
       max = 31143
@@ -80,18 +82,11 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "6"
     source      = "10.0.0.0/24"
     source_type = "CIDR_BLOCK"
-    stateless   = false
+    stateless   = true
 
     tcp_options {
       max = 31143
       min = 31143
     }
-  }
-  ingress_security_rules {
-    description = "All"
-    protocol    = "all"
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    stateless   = false
   }
 }
