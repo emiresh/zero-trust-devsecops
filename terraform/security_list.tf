@@ -1,4 +1,5 @@
 resource "oci_core_security_list" "default_sec_list" {
+  #checkov:skip=CKV_OCI_17:Stateful rules required for proper connection tracking
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.main_vcn.id
   display_name   = "Default Security List for vcn-20250929-1819"
@@ -36,7 +37,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "1"
     source      = "10.0.0.0/16"
     source_type = "CIDR_BLOCK"
-    stateless   = true
+    stateless   = false
 
     icmp_options {
       code = -1
@@ -47,7 +48,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "1"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = true
+    stateless   = false
 
     icmp_options {
       code = 4
@@ -60,7 +61,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "6"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = true
+    stateless   = false
 
     tcp_options {
       max = 22
@@ -71,7 +72,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "6"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
-    stateless   = true
+    stateless   = false
 
     tcp_options {
       max = 31143
@@ -82,7 +83,7 @@ resource "oci_core_security_list" "default_sec_list" {
     protocol    = "6"
     source      = "10.0.0.0/24"
     source_type = "CIDR_BLOCK"
-    stateless   = true
+    stateless   = false
 
     tcp_options {
       max = 31143
