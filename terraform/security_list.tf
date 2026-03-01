@@ -69,6 +69,18 @@ resource "oci_core_security_list" "default_sec_list" {
     }
   }
   ingress_security_rules {
+    description = "Kubernetes API Server"
+    protocol    = "6"
+    source      = "0.0.0.0/0"
+    source_type = "CIDR_BLOCK"
+    stateless   = false
+
+    tcp_options {
+      max = 6443
+      min = 6443
+    }
+  }
+  ingress_security_rules {
     protocol    = "6"
     source      = "0.0.0.0/0"
     source_type = "CIDR_BLOCK"
