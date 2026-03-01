@@ -150,4 +150,12 @@ resource "oci_core_security_list" "default_sec_list" {
       min = 31143
     }
   }
+  #checkov:skip=CKV_OCI_20:All protocols allowed for proxy connectivity from control to workers
+  ingress_security_rules {
+    description = "All protocols (for proxy/NAT)"
+    protocol    = "all"
+    source      = "0.0.0.0/0"
+    source_type = "CIDR_BLOCK"
+    stateless   = false
+  }
 }
