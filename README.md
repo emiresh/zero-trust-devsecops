@@ -378,6 +378,57 @@ Developer Push → PR Validation (< 2 min)
 
 ---
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+### Quick Links by Role
+
+**For Developers:**
+- [Development Guide](docs/deployment/DEVELOPMENT-GUIDE.md) - Local setup and development workflow
+- [PR Validation Workflow](docs/workflows/PR-VALIDATION-WORKFLOW.md) - Fast PR feedback process
+- [Docker Compose Setup](docs/deployment/DOCKER-COMPOSE-README.md) - Local container orchestration
+
+**For DevOps Engineers:**
+- [System Architecture](docs/architecture/SYSTEM-ARCHITECTURE.md) - Complete infrastructure and platform overview
+- [Workflows Overview](docs/workflows/README.md) - All GitHub Actions pipelines
+- [Cluster Security Guide](docs/security/CLUSTER-SECURITY-GUIDE.md) - Kubernetes hardening
+
+**For Security Teams:**
+- [Security Overview](docs/security/SECURITY-OVERVIEW.md) - Comprehensive security architecture
+- [Security Tools Guide](docs/security/SECURITY-TOOLS.md) - Trivy, Checkov, Kyverno, Falco, OPA
+- [Secret Management](docs/workflows/SECRET-ROTATION-WORKFLOW.md) - Sealed Secrets and rotation
+
+### Documentation by Category
+
+**🔄 GitHub Actions Workflows** ([docs/workflows/](docs/workflows/)):
+- [App CI/CD](docs/workflows/APP-CICD-WORKFLOW.md) - Build, scan, deploy microservices
+- [Secret Rotation](docs/workflows/SECRET-ROTATION-WORKFLOW.md) - Automated credential rotation
+- [Security Scan](docs/workflows/SECURITY-SCAN-WORKFLOW.md) - Monthly vulnerability audits
+- [Terraform Pipeline](docs/workflows/TERRAFORM-WORKFLOW.md) - Infrastructure deployment
+- [PR Validation](docs/workflows/PR-VALIDATION-WORKFLOW.md) - Fast PR checks
+
+**🏗️ Architecture** ([docs/architecture/](docs/architecture/)):
+- [System Architecture](docs/architecture/SYSTEM-ARCHITECTURE.md) - Infrastructure, Kubernetes, apps, security, GitOps
+
+**🔐 Security** ([docs/security/](docs/security/)):
+- [Security Overview](docs/security/SECURITY-OVERVIEW.md) - Zero-trust principles, tools, policies, incident response
+
+**📊 Monitoring** ([docs/monitoring/](docs/monitoring/)):
+- [Grafana Alerts](docs/monitoring/GRAFANA-APPLICATION-ALERTS.md) - Application monitoring
+- [PagerDuty Integration](docs/monitoring/PAGERDUTY-INTEGRATION.md) - Incident alerting
+- [Falco Guide](docs/security/FALCO-COMPLETE-GUIDE.md) - Runtime security monitoring
+
+**🚀 Deployment** ([docs/deployment/](docs/deployment/)):
+- [Development vs Production](docs/deployment/DEV-VS-PROD.md) - Environment setup
+- [Terraform Guide](docs/deployment/TERRAFORM-PIPELINE-GUIDE.md) - IaC deployment
+
+### Master Index
+
+For complete navigation and documentation standards: **[docs/README.md](docs/README.md)**
+
+---
+
 ## Development Workflow
 
 ### With Automated CI/CD (Current)
