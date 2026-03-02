@@ -51,14 +51,22 @@ jobs:
             exit 0
           fi
           
-          # Get changed files
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          # If workflow was triggered by path filter, changes must exist
+          # Otherwise GitHub wouldn't have triggered the workflow
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Push event detected - will build"
+            exit 0
+          fi
+          
+          # Fallback: check for changes manually
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           
           echo "📝 Changed files:"
           echo "$CHANGED_FILES"
           
-          # Check if research directory changed
-          if echo "$CHANGED_FILES" | grep -q "^research/"; then
+          # Check if research directory or workflow changed
+          if echo "$CHANGED_FILES" | grep -qE "^(research/|\.github/workflows/ai-collector-cicd\.yml)"; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
             echo "✅ AI collector changes detected"
           else
@@ -273,11 +281,12 @@ jobs:
   update-manifests:
     name: 📝 Update Deployment Manifest (GitOps)
     runs-on: ubuntu-latest
-    needs: build-and-scan
+    needs: [detect-changes, build-and-scan]
     if: |
       always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
+      needs.detect-changes.outputs.has_changes == 'true' &&
       needs.build-and-scan.result == 'success'
     
     permissions:
