@@ -366,15 +366,35 @@ jobs:
             echo "✅ GitOps: Deployment manifest updated and committed"
           fi
 
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create/Update Azure OpenAI Secret
+        run: |
+          echo "🔐 Creating Azure OpenAI credentials secret..."
+          
+          kubectl create secret generic azure-openai-secret \
+            -n ai-security \
+            --from-literal=endpoint="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
+            --from-literal=api-key="${{ secrets.AZURE_OPENAI_KEY }}" \
+            --from-literal=deployment="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ Azure OpenAI secret configured in cluster"
+
       - name: Trigger ArgoCD Sync
         run: |
           echo "🔄 ArgoCD will auto-sync within 3 minutes"
           echo ""
           echo "📊 Deployment Timeline:"
           echo "   1. Manifest committed ✅"
-          echo "   2. ArgoCD detects change (polling every 3 min)"
-          echo "   3. Auto-sync triggered"
-          echo "   4. AI collector pod updated"
+          echo "   2. Azure secret updated ✅"
+          echo "   3. ArgoCD detects change (polling every 3 min)"
+          echo "   4. Auto-sync triggered"
+          echo "   5. AI collector pod updated"
           echo ""
           echo "Monitor with:"
           echo "   kubectl get pods -n ai-security -w"

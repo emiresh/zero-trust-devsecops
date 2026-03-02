@@ -24,6 +24,9 @@ import asyncio
 import logging
 from collections import deque
 
+# Import AI incident reporter for enhanced security analysis
+from advisors.incident_reporter import IncidentReporter
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +58,11 @@ stats = {
 DATA_DIR = Path(os.getenv("DATA_DIR", "/tmp/ai-security-data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 EVENTS_FILE = DATA_DIR / "falco_events.jsonl"
+AI_REPORTS_FILE = DATA_DIR / "ai_reports.jsonl"
+
+# Initialize AI incident reporter (gracefully degrades if Azure not configured)
+ai_reporter = IncidentReporter()
+logger.info(f"AI incident reporter initialized: {'enabled' if ai_reporter.enabled else 'disabled (Azure credentials not set)'}")
 
 
 @app.post("/events")
@@ -107,11 +115,52 @@ async def receive_falco_event(request: Request):
         with open(EVENTS_FILE, "a") as f:
             f.write(json.dumps(enriched_event) + "\n")
         
+        # Generate AI-enhanced incident report for HIGH/CRITICAL events
+        ai_report_generated = False
+        if priority in ["Critical", "Error", "Warning"] and ai_reporter.enabled:
+            try:
+                # Build context for AI analysis
+                event_context = {
+                    "falco_rule": rule,
+                    "container": enriched_event["metadata"]["container"],
+                    "namespace": enriched_event["metadata"]["namespace"],
+                    "risk_level": priority,
+                    "risk_score": 0.9 if priority == "Critical" else 0.7 if priority == "Error" else 0.5,
+                    "behavioral_context": output,
+                    "anomaly_score": 0.0  # Future: ML-based anomaly detection
+                }
+                
+                # Generate AI report using Azure OpenAI
+                report = ai_reporter.generate_report(event_context)
+                
+                if report:
+                    ai_record = {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "event_timestamp": timestamp,
+                        "priority": priority,
+                        "rule": rule,
+                        "container": enriched_event["metadata"]["container"],
+                        "namespace": enriched_event["metadata"]["namespace"],
+                        "ai_report": report,
+                        "event_id": stats["total_events"]
+                    }
+                    
+                    # Store AI report to separate file
+                    with open(AI_REPORTS_FILE, "a") as f:
+                        f.write(json.dumps(ai_record) + "\n")
+                    
+                    ai_report_generated = True
+                    logger.info(f"AI report generated for {priority} event: {rule}")
+            
+            except Exception as e:
+                logger.error(f"Failed to generate AI report: {e}", exc_info=True)
+        
         return JSONResponse(
             status_code=200,
             content={
                 "status": "collected", 
-                "event_id": stats["total_events"]
+                "event_id": stats["total_events"],
+                "ai_report_generated": ai_report_generated
             }
         )
         
@@ -144,7 +193,11 @@ async def get_statistics():
         "buffer_size": len(event_buffer),
         "events_file": str(EVENTS_FILE),
         "events_file_exists": EVENTS_FILE.exists(),
-        "events_file_size_bytes": EVENTS_FILE.stat().st_size if EVENTS_FILE.exists() else 0
+        "events_file_size_bytes": EVENTS_FILE.stat().st_size if EVENTS_FILE.exists() else 0,
+        "ai_reports_file": str(AI_REPORTS_FILE),
+        "ai_reports_file_exists": AI_REPORTS_FILE.exists(),
+        "ai_reports_file_size_bytes": AI_REPORTS_FILE.stat().st_size if AI_REPORTS_FILE.exists() else 0,
+        "ai_reporter_enabled": ai_reporter.enabled
     }
 
 

@@ -30,9 +30,9 @@ class IncidentReporter:
         self.client = AzureOpenAI(
             azure_endpoint=endpoint,
             api_key=api_key,
-            api_version="2024-10-21"
+            api_version="2024-12-01-preview"
         )
-        self.model = os.getenv("AZURE_OPENAI_MODEL", "gpt-4o-mini")
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
         self.enabled = True
         logger.info("Incident reporter initialized with Azure OpenAI")
     
