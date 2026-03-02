@@ -1,0 +1,377 @@
+name: AI Security Collector - Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'research/**'
+      - '.github/workflows/ai-collector-cicd.yml'
+    tags:
+      - 'ai-v*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  security-events: write
+  packages: read
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/ai-security-collector
+
+jobs:
+  # ==========================================
+  # STAGE 1: Detect Changes
+  # ==========================================
+  detect-changes:
+    name: 🔍 Detect AI Collector Changes
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changes
+        id: detect
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Manual trigger - will build"
+            exit 0
+          fi
+          
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          
+          echo "📝 Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if research directory changed
+          if echo "$CHANGED_FILES" | grep -q "^research/"; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ AI collector changes detected"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No AI collector changes"
+          fi
+
+  # ==========================================
+  # STAGE 2: Build, Scan & Push
+  # ==========================================
+  build-and-scan:
+    name: 🏗️ Build & Scan AI Security Collector
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for ARM64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Security Tools
+        run: |
+          # Install Trivy
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          
+          # Install Syft for SBOM generation
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate Image Tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Generate semantic version tag
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          else
+            TAG="dev-${SHORT_SHA}"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "📦 Image Tag: $TAG"
+
+      - name: Build Docker Image
+        id: build
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          
+          echo "🏗️ Building AI Security Collector (ARM64 for OCI cluster)..."
+          
+          cd research
+          
+          docker buildx build \
+            --platform linux/arm64 \
+            --load \
+            -t "${IMAGE_NAME}:${TAG}" \
+            -t "${IMAGE_NAME}:latest" \
+            .
+          
+          echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+          echo "✅ Build completed"
+
+      - name: Generate SBOM (Software Bill of Materials)
+        run: |
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          echo "📋 Generating SBOM for AI Security Collector..."
+          
+          # Generate SBOM in multiple formats
+          syft "$IMAGE" -o spdx-json > sbom-ai-collector-spdx.json
+          syft "$IMAGE" -o cyclonedx-json > sbom-ai-collector-cyclonedx.json
+          syft "$IMAGE" -o table
+          
+          echo "✅ SBOM generated"
+
+      - name: Scan Image with Trivy
+        id: trivy
+        run: |
+          IMAGE="${{ steps.build.outputs.full_image }}"
+          
+          echo "🔍 Security Scan: $IMAGE"
+          
+          # Scan for vulnerabilities
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format table \
+            --exit-code 0 \
+            "$IMAGE" 2>&1 | tee trivy-report.txt
+          
+          # Generate reports
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            --output trivy-results.sarif \
+            "$IMAGE" 2>/dev/null || echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+          
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output trivy-results.json \
+            "$IMAGE" 2>/dev/null || echo '{"Results":[]}' > trivy-results.json
+          
+          # Parse results
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo "0")
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo "0")
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo ""
+          echo "📊 Vulnerability Summary:"
+          echo "   🔴 CRITICAL: $CRITICAL"
+          echo "   🟠 HIGH: $HIGH"
+
+      - name: Upload Trivy Results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: ai-collector-container-scan
+
+      - name: Security Gate (Fail on Critical Vulnerabilities)
+        run: |
+          CRITICAL="${{ steps.trivy.outputs.critical }}"
+          HIGH="${{ steps.trivy.outputs.high }}"
+          
+          if [[ "$CRITICAL" -gt 0 ]]; then
+            echo "❌ SECURITY GATE FAILED: $CRITICAL critical vulnerabilities found"
+            echo "⚠️  Fix critical vulnerabilities before deployment"
+            exit 1
+          fi
+          
+          if [[ "$HIGH" -gt 10 ]]; then
+            echo "⚠️  WARNING: $HIGH high vulnerabilities found (>10 threshold)"
+            echo "ℹ️  Consider reviewing before production deployment"
+            # Don't fail, just warn
+          fi
+          
+          echo "✅ Security gate passed"
+
+      - name: Push to Docker Hub
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          
+          echo "📤 Pushing images to Docker Hub..."
+          
+          docker push "${IMAGE_NAME}:${TAG}"
+          docker push "${IMAGE_NAME}:latest"
+          
+          echo "✅ Images pushed:"
+          echo "   • ${IMAGE_NAME}:${TAG}"
+          echo "   • ${IMAGE_NAME}:latest"
+
+      - name: Upload SBOM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-collector-sbom
+          path: |
+            sbom-ai-collector-*.json
+          retention-days: 90
+
+      - name: Create Release Comment
+        if: github.ref == 'refs/heads/main'
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          CRITICAL="${{ steps.trivy.outputs.critical }}"
+          HIGH="${{ steps.trivy.outputs.high }}"
+          
+          cat > release-notes.md << EOF
+          ## 🚀 AI Security Collector Release: $TAG
+          
+          **Image:** \`${{ env.IMAGE_NAME }}:${TAG}\`
+          
+          **Security Scan Results:**
+          - 🔴 CRITICAL vulnerabilities: $CRITICAL
+          - 🟠 HIGH vulnerabilities: $HIGH
+          
+          **Deployment:** GitOps via ArgoCD (auto-sync within 3 minutes)
+          EOF
+          
+          cat release-notes.md
+
+  # ==========================================
+  # STAGE 3: Update Manifests (GitOps)
+  # ==========================================
+  update-manifests:
+    name: 📝 Update Deployment Manifest (GitOps)
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-and-scan.result == 'success'
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Kubernetes Manifest
+        id: update
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          
+          echo "📝 Updating deployment manifest with tag: $TAG"
+          
+          # Update image tag in deployment.yaml
+          sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${TAG}|g" \
+            research/k8s/deployment.yaml
+          
+          # Also update deployment-with-azure.yaml
+          sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${TAG}|g" \
+            research/k8s/deployment-with-azure.yaml
+          
+          echo ""
+          echo "🔍 Updated deployment.yaml:"
+          grep "image: ${IMAGE_NAME}" research/k8s/deployment.yaml
+          
+          echo "updated=true" >> $GITHUB_OUTPUT
+
+      - name: Commit Changes
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          git add research/k8s/deployment.yaml
+          git add research/k8s/deployment-with-azure.yaml
+          
+          if git diff --staged --quiet; then
+            echo "ℹ️ No changes to commit"
+          else
+            git commit -m "chore: update AI collector image to $TAG [skip ci]"
+            git push
+            echo "✅ GitOps: Deployment manifest updated and committed"
+          fi
+
+      - name: Trigger ArgoCD Sync
+        run: |
+          echo "🔄 ArgoCD will auto-sync within 3 minutes"
+          echo ""
+          echo "📊 Deployment Timeline:"
+          echo "   1. Manifest committed ✅"
+          echo "   2. ArgoCD detects change (polling every 3 min)"
+          echo "   3. Auto-sync triggered"
+          echo "   4. AI collector pod updated"
+          echo ""
+          echo "Monitor with:"
+          echo "   kubectl get pods -n ai-security -w"
+
+  # ==========================================
+  # STAGE 4: Pipeline Summary
+  # ==========================================
+  notify:
+    name: 📊 Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-scan, update-manifests]
+    if: always()
+    
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🚀 AI Security Collector CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Detect Changes | ${{ needs.detect-changes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Scan | ${{ needs.build-and-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Update Manifests (GitOps) | ${{ needs.update-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.build-and-scan.result }}" == "success" && "${{ needs.update-manifests.result }}" == "success" ]]; then
+            echo "✅ **Build**: Image built and scanned successfully" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **GitOps**: Manifest updated, ArgoCD will auto-sync" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Image**: \`emiresh/ai-security-collector:v1.0.${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🔍 Monitor deployment:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "kubectl get pods -n ai-security -w" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "❌ Pipeline failed - review logs above" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

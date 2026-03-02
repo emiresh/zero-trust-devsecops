@@ -1,0 +1,89 @@
+# AI Security Control Plane Configuration
+# Used by all collectors and services
+
+# Service Configuration
+service:
+  name: "ai-security-collector"
+  version: "0.1.0"
+  port: 8000
+  host: "0.0.0.0"
+  debug: false
+
+# Data Storage
+storage:
+  events_file: "/data/falco_events.jsonl"
+  dataset_dir: "/data/datasets"
+  models_dir: "/data/models"
+  
+# Falco Collector
+falco:
+  webhook_path: "/events"
+  buffer_size: 1000  # Max events in memory before flush
+  flush_interval_seconds: 30
+
+# Prometheus Collector
+prometheus:
+  url: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+  scrape_interval_seconds: 30
+  metrics:
+    - "container_memory_working_set_bytes"
+    - "container_cpu_usage_seconds_total"
+    - "kube_pod_container_status_restarts_total"
+    - "kube_pod_status_phase"
+
+# GitHub Collector (for CI/CD artifacts)
+github:
+  api_url: "https://api.github.com"
+  repo_owner: "emiresh"  # Change to your GitHub username
+  repo_name: "zero-trust-devsecops"
+  # Token set via environment variable: GITHUB_TOKEN
+
+# ML Models Configuration
+models:
+  isolation_forest:
+    contamination: 0.05
+    n_estimators: 100
+    random_state: 42
+  
+  autoencoder:
+    input_dim: 20  # Adjust after feature engineering
+    encoding_dim: 8
+    epochs: 50
+    batch_size: 32
+  
+  lstm:
+    sequence_length: 10
+    hidden_dim: 64
+    num_layers: 2
+    epochs: 30
+    batch_size: 16
+
+# Risk Scoring Weights
+risk_scoring:
+  weights:
+    anomaly: 0.40      # ML model output
+    vulnerability: 0.25  # Trivy CVE count
+    compliance: 0.20    # OPA violations
+    behavioral: 0.15    # Prometheus metrics deviation
+  
+  thresholds:
+    low: 0.25
+    medium: 0.50
+    high: 0.75
+
+# Azure OpenAI (for incident reports)
+azure_openai:
+  # Set via environment variables:
+  # AZURE_OPENAI_ENDPOINT
+  # AZURE_OPENAI_API_KEY
+  model: "gpt-4o-mini"
+  max_tokens: 500
+  temperature: 0.3
+  # Only generate reports for HIGH/CRITICAL
+  min_risk_level: "HIGH"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "json"
+  file: "/data/logs/ai-security.log"

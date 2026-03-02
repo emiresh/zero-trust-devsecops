@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-security-collector
+  namespace: ai-security
+  labels:
+    app: ai-security-collector
+    component: collector
+spec:
+  replicas: 1  # Single replica for data consistency during research
+  selector:
+    matchLabels:
+      app: ai-security-collector
+  template:
+    metadata:
+      labels:
+        app: ai-security-collector
+        component: collector
+    spec:
+      # Security context (non-root, no privileges)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      containers:
+      - name: collector
+        image: emiresh/ai-security-collector:latest  # Build and push this image
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        # Resource limits (lightweight service)
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true  # Read-only except /data volume
+          capabilities:
+            drop:
+            - ALL
+        
+        # Environment variables
+        env:
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+        - name: DATA_DIR
+          value: "/data"
+        
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp  # Needed because readOnlyRootFilesystem=true
+          mountPath: /tmp
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-security-data
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-security-data
+  namespace: ai-security
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path  # Same as your existing cluster
+  resources:
+    requests:
+      storage: 5Gi  # Enough for ~1M Falco events

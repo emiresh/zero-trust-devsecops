@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-security-collector
+  namespace: argocd
+  labels:
+    app: ai-security-collector
+    component: research
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/emiresh/zero-trust-devsecops.git
+    targetRevision: main
+    path: research/k8s
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-security
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Health checks
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas  # Ignore replica changes from HPA

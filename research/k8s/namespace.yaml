@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-security
+  labels:
+    app.kubernetes.io/name: ai-security
+    app.kubernetes.io/part-of: ai-security-research
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

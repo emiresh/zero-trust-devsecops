@@ -1,0 +1,216 @@
+##############################################################################
+# Kubernetes Deployment with Azure AI Integration
+#
+# This deployment includes Azure OpenAI credentials for incident report generation.
+# Deploy this AFTER running ./setup_azure.sh
+#
+# Usage:
+#   kubectl apply -f k8s/deployment-with-azure.yaml
+#
+##############################################################################
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-security-collector
+  namespace: ai-security
+  labels:
+    app: ai-security-collector
+    component: data-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-security-collector
+  
+  template:
+    metadata:
+      labels:
+        app: ai-security-collector
+        component: data-collector
+    
+    spec:
+      # Security context for the pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+      - name: collector
+        image: emiresh/ai-security-collector:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        # Resource limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Container security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        
+        # Environment variables
+        env:
+        # Azure OpenAI credentials (from secret)
+        - name: AZURE_OPENAI_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: azure-ai-credentials
+              key: AZURE_OPENAI_ENDPOINT
+              optional: true  # Collector works without Azure AI
+        
+        - name: AZURE_OPENAI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-ai-credentials
+              key: AZURE_OPENAI_KEY
+              optional: true
+        
+        - name: AZURE_OPENAI_MODEL
+          value: "gpt-4o-mini"
+        
+        # Azure Storage credentials (from secret)
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: azure-ai-credentials
+              key: AZURE_STORAGE_CONNECTION_STRING
+              optional: true
+        
+        # Data directory
+        - name: DATA_DIR
+          value: "/data"
+        
+        # Prometheus endpoint
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+        
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 2
+      
+      # Volumes
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-security-data
+      
+      - name: tmp
+        emptyDir: {}
+      
+      - name: config
+        configMap:
+          name: ai-security-config
+          optional: true
+
+---
+##############################################################################
+# PersistentVolumeClaim for data storage
+##############################################################################
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-security-data
+  namespace: ai-security
+  labels:
+    app: ai-security-collector
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path  # Change if your cluster uses different storage class
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+##############################################################################
+# ConfigMap for application configuration
+##############################################################################
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-security-config
+  namespace: ai-security
+data:
+  config.yaml: |
+    # AI Security Control Plane Configuration
+    
+    # Prometheus settings
+    prometheus:
+      url: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+      timeout: 10
+    
+    # Risk scoring weights
+    risk_scoring:
+      weights:
+        anomaly: 0.40      # ML anomaly score
+        vulnerability: 0.25 # CVE severity
+        compliance: 0.20    # Policy violations
+        behavioral: 0.15    # Deviation from baseline
+      
+      thresholds:
+        low: 0.25
+        medium: 0.50
+        high: 0.75
+        critical: 1.00
+    
+    # Data collection
+    data:
+      max_events_in_memory: 1000
+      flush_interval_seconds: 60
+      retention_days: 90
+    
+    # Azure AI (optional - works without it)
+    azure_ai:
+      enabled: true  # Set to false to disable Azure AI features
+      generate_reports_for:
+        - HIGH
+        - CRITICAL
+      max_tokens: 500
+      temperature: 0.3
