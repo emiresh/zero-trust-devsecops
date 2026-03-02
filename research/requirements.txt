@@ -3,6 +3,7 @@
 
 # Web Framework
 fastapi==0.115.0
+starlette>=0.40.0  # Explicit override - Security fix for CVE-2024-47874
 python-multipart>=0.0.22  # Security fix for CVE-2024-53981, CVE-2026-24486
 uvicorn[standard]==0.32.0
 pydantic==2.9.0

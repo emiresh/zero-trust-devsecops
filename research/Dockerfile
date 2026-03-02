@@ -1,5 +1,9 @@
 # Multi-stage build for AI Security Collector
-# Note: Using latest Debian base image. CVE-2026-0861 (glibc) - no fix available yet
+# SECURITY NOTES:
+# - CVE-2026-0861 (glibc): No fix available - affects libc-bin, libc6
+# - CVE-2025-7458 (sqlite): Tracked, waiting for Debian security update
+# - CVE-2023-45853 (zlib): Marked will_not_fix by vendor
+# Using Debian Bookworm (12) - latest stable version
 FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
