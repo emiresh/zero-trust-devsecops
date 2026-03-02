@@ -337,13 +337,9 @@ jobs:
           
           echo "📝 Updating deployment manifest with tag: $TAG"
           
-          # Update image tag in deployment.yaml
+          # Update image tag in deployment.yaml (single source of truth)
           sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${TAG}|g" \
             research/k8s/deployment.yaml
-          
-          # Also update deployment-with-azure.yaml
-          sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${TAG}|g" \
-            research/k8s/deployment-with-azure.yaml
           
           echo ""
           echo "🔍 Updated deployment.yaml:"
@@ -358,8 +354,11 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
+          # Pull latest changes to avoid conflicts
+          git pull --rebase origin main || echo "Already up to date"
+          
+          # Only stage deployment.yaml (single source of truth)
           git add research/k8s/deployment.yaml
-          git add research/k8s/deployment-with-azure.yaml
           
           if git diff --staged --quiet; then
             echo "ℹ️ No changes to commit"
