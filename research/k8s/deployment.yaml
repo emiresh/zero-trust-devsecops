@@ -89,6 +89,22 @@ spec:
               name: azure-openai-secret
               key: deployment
         
+        # Integration webhooks (optional - graceful degradation if not set)
+        # Note: PagerDuty integration handled by AlertManager (immediate alerts)
+        # AI Collector uses Slack for team collaboration with AI-enhanced context
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-collector-integrations
+              key: slack-webhook-url
+              optional: true
+        - name: CUSTOM_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-collector-integrations
+              key: custom-webhook-url
+              optional: true
+        
         # Volume mounts
         volumeMounts:
         - name: data

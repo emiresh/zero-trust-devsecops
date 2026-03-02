@@ -26,6 +26,8 @@ from collections import deque
 
 # Import AI incident reporter for enhanced security analysis
 from advisors.incident_reporter import IncidentReporter
+# Import integrations for sending AI reports to external platforms
+from collectors.integrations import SlackIntegration, WebhookIntegration
 
 # Configure logging
 logging.basicConfig(
@@ -63,6 +65,12 @@ AI_REPORTS_FILE = DATA_DIR / "ai_reports.jsonl"
 # Initialize AI incident reporter (gracefully degrades if Azure not configured)
 ai_reporter = IncidentReporter()
 logger.info(f"AI incident reporter initialized: {'enabled' if ai_reporter.enabled else 'disabled (Azure credentials not set)'}")
+
+# Initialize integrations for sending AI reports
+# Note: PagerDuty integration is handled by AlertManager (immediate 2-3s alerts)
+# AI reports use Slack for team collaboration (15-20s with AI analysis)
+slack_integration = SlackIntegration()
+webhook_integration = WebhookIntegration()
 
 
 @app.post("/events")
@@ -151,6 +159,11 @@ async def receive_falco_event(request: Request):
                     
                     ai_report_generated = True
                     logger.info(f"AI report generated for {priority} event: {rule}")
+                    
+                    # Send notifications to integrated platforms (async, non-blocking)
+                    # Note: PagerDuty alerts already sent via AlertManager (immediate, no AI)
+                    asyncio.create_task(slack_integration.send_report(ai_record))
+                    asyncio.create_task(webhook_integration.send_report(ai_record))
             
             except Exception as e:
                 logger.error(f"Failed to generate AI report: {e}", exc_info=True)
@@ -199,6 +212,101 @@ async def get_statistics():
         "ai_reports_file_size_bytes": AI_REPORTS_FILE.stat().st_size if AI_REPORTS_FILE.exists() else 0,
         "ai_reporter_enabled": ai_reporter.enabled
     }
+
+
+@app.get("/reports")
+async def get_ai_reports(limit: int = 10, priority: str = None):
+    """
+    Get AI-generated incident reports.
+    
+    Query params:
+    - limit: Number of reports to return (default: 10, max: 100)
+    - priority: Filter by priority (Critical, Error, Warning)
+    """
+    try:
+        if not AI_REPORTS_FILE.exists():
+            return {"reports": [], "count": 0, "message": "No AI reports generated yet"}
+        
+        reports = []
+        with open(AI_REPORTS_FILE, "r") as f:
+            for line in f:
+                if line.strip():
+                    report = json.loads(line)
+                    if priority is None or report.get("priority") == priority:
+                        reports.append(report)
+        
+        # Return most recent first
+        reports = reports[-min(limit, 100):][::-1]
+        
+        return {
+            "reports": reports,
+            "count": len(reports),
+            "ai_enabled": ai_reporter.enabled
+        }
+    
+    except Exception as e:
+        logger.error(f"Error reading AI reports: {e}")
+        return {"error": str(e), "reports": [], "count": 0}
+
+
+@app.get("/reports/{event_id}")
+async def get_report_by_id(event_id: int):
+    """Get specific AI report by event ID"""
+    try:
+        if not AI_REPORTS_FILE.exists():
+            raise HTTPException(status_code=404, detail="No reports found")
+        
+        with open(AI_REPORTS_FILE, "r") as f:
+            for line in f:
+                if line.strip():
+                    report = json.loads(line)
+                    if report.get("event_id") == event_id:
+                        return report
+        
+        raise HTTPException(status_code=404, detail=f"Report for event {event_id} not found")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/reports/latest/text", response_class=JSONResponse)
+async def get_latest_report_text():
+    """Get the latest AI report in human-readable text format"""
+    try:
+        if not AI_REPORTS_FILE.exists():
+            return {"message": "No AI reports generated yet"}
+        
+        # Read last report
+        with open(AI_REPORTS_FILE, "r") as f:
+            lines = f.readlines()
+            if not lines:
+                return {"message": "No reports available"}
+            
+            report = json.loads(lines[-1])
+            
+            # Format as readable text
+            text = f"""
+╔══════════════════════════════════════════════════════════════╗
+║           AI SECURITY INCIDENT REPORT #{report['event_id']}              
+╚══════════════════════════════════════════════════════════════╝
+
+Priority:   {report['priority']}
+Rule:       {report['rule']}
+Container:  {report['container']}
+Namespace:  {report['namespace']}
+Timestamp:  {report['timestamp']}
+
+{report['ai_report']}
+
+════════════════════════════════════════════════════════════════
+"""
+            return {"report": text, "metadata": {k: v for k, v in report.items() if k != 'ai_report'}}
+    
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/events/recent")

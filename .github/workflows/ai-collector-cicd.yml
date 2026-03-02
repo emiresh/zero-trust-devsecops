@@ -388,16 +388,45 @@ jobs:
           
           echo "✅ Azure OpenAI secret configured in cluster"
 
+      - name: Create/Update Integration Secrets
+        run: |
+          echo "🔐 Creating integration secrets (Slack, webhooks)..."
+          
+          # Build secret with all available integrations (all optional)
+          SECRET_ARGS=""
+          
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            SECRET_ARGS="$SECRET_ARGS --from-literal=slack-webhook-url=${{ secrets.SLACK_WEBHOOK_URL }}"
+            echo "  ✓ Slack webhook configured"
+          fi
+          
+          if [ -n "${{ secrets.CUSTOM_WEBHOOK_URL }}" ]; then
+            SECRET_ARGS="$SECRET_ARGS --from-literal=custom-webhook-url=${{ secrets.CUSTOM_WEBHOOK_URL }}"
+            echo "  ✓ Custom webhook configured"
+          fi
+          
+          # Only create secret if at least one integration is configured
+          if [ -n "$SECRET_ARGS" ]; then
+            kubectl create secret generic ai-collector-integrations \
+              -n ai-security \
+              $SECRET_ARGS \
+              --dry-run=client -o yaml | kubectl apply -f -
+            echo "✅ Integration secrets configured in cluster"
+          else
+            echo "ℹ️ No integration secrets configured (all optional)"
+          fi
+
       - name: Trigger ArgoCD Sync
         run: |
           echo "🔄 ArgoCD will auto-sync within 3 minutes"
           echo ""
           echo "📊 Deployment Timeline:"
           echo "   1. Manifest committed ✅"
-          echo "   2. Azure secret updated ✅"
-          echo "   3. ArgoCD detects change (polling every 3 min)"
-          echo "   4. Auto-sync triggered"
-          echo "   5. AI collector pod updated"
+          echo "   2. Azure OpenAI secret updated ✅"
+          echo "   3. Integration secrets updated ✅"
+          echo "   4. ArgoCD detects change (polling every 3 min)"
+          echo "   5. Auto-sync triggered"
+          echo "   6. AI collector pod updated"
           echo ""
           echo "Monitor with:"
           echo "   kubectl get pods -n ai-security -w"

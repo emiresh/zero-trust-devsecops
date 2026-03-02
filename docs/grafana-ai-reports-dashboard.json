@@ -1,0 +1,315 @@
+{
+  "dashboard": {
+    "title": "AI Security Reports - Zero Trust DevSecOps",
+    "tags": ["security", "ai", "falco", "zero-trust"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    
+    "panels": [
+      {
+        "id": 1,
+        "title": "AI Reports by Priority",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports?limit=100",
+            "method": "GET",
+            "jsonPath": "$.reports[*].priority"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "donut"
+        }
+      },
+      
+      {
+        "id": 2,
+        "title": "Recent AI Security Reports",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports?limit=20",
+            "method": "GET"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "timestamp": 0,
+                "priority": 1,
+                "rule": 2,
+                "namespace": 3,
+                "container": 4,
+                "event_id": 5
+              },
+              "renameByName": {
+                "timestamp": "Time",
+                "priority": "Priority",
+                "rule": "Falco Rule",
+                "namespace": "Namespace",
+                "container": "Container",
+                "event_id": "Event ID"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Priority"},
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "Critical": {"color": "red", "index": 0},
+                        "Error": {"color": "orange", "index": 1},
+                        "Warning": {"color": "yellow", "index": 2}
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": 3,
+        "title": "AI Reports Timeline",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports?limit=100",
+            "method": "GET"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "lineInterpolation": "linear",
+              "barAlignment": 0,
+              "fillOpacity": 80,
+              "gradientMode": "none",
+              "pointSize": 5,
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "mode": "normal",
+                "group": "A"
+              }
+            },
+            "color": {
+              "mode": "palette-classic"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "legend": {
+            "calcs": ["sum"],
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      
+      {
+        "id": 4,
+        "title": "Top Triggered Falco Rules",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports?limit=100",
+            "method": "GET",
+            "jsonPath": "$.reports[*].rule"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "continuous-GrYlRd"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 3, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 5,
+        "title": "Latest AI Report (Full Analysis)",
+        "type": "text",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports/latest/text",
+            "method": "GET",
+            "jsonPath": "$.report"
+          }
+        ],
+        "options": {
+          "mode": "markdown",
+          "content": "${__data.fields.report}"
+        }
+      },
+      
+      {
+        "id": 6,
+        "title": "AI Collector Health",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 4},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/health",
+            "method": "GET",
+            "jsonPath": "$.status"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "textMode": "value_and_name",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "healthy": {"color": "green", "text": "Healthy"}
+                }
+              }
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 7,
+        "title": "Total AI Reports Generated",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 4},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/reports?limit=1000",
+            "method": "GET",
+            "jsonPath": "$.count"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "textMode": "value_and_name",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 8,
+        "title": "AI Reporter Status",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 4},
+        "targets": [
+          {
+            "refId": "A",
+            "url": "http://ai-collector.ai-security:8000/stats",
+            "method": "GET",
+            "jsonPath": "$.ai_reporter_enabled"
+          }
+        ],
+        "options": {
+          "textMode": "value_and_name",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "true": {"color": "green", "text": "Enabled"},
+                  "false": {"color": "red", "text": "Disabled"}
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  
+  "overwrite": true,
+  "message": "AI Security Reports Dashboard - Zero Trust DevSecOps Thesis"
+}
