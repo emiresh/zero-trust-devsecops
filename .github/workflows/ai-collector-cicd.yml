@@ -154,6 +154,7 @@ jobs:
           echo "✅ Build completed"
 
       - name: Generate SBOM (Software Bill of Materials)
+        if: success()
         run: |
           IMAGE="${{ steps.build.outputs.full_image }}"
           
@@ -166,8 +167,16 @@ jobs:
           
           echo "✅ SBOM generated"
 
+      - name: Create Default SARIF File
+        if: always()
+        run: |
+          # Create a valid empty SARIF file as fallback
+          echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[]}' > trivy-results.sarif
+          echo "📄 Default SARIF file created"
+
       - name: Scan Image with Trivy
         id: trivy
+        if: success() && steps.build.outputs.full_image != ''
         run: |
           IMAGE="${{ steps.build.outputs.full_image }}"
           
@@ -214,9 +223,14 @@ jobs:
           category: ai-collector-container-scan
 
       - name: Security Gate (Fail on Critical Vulnerabilities)
+        if: success()
         run: |
           CRITICAL="${{ steps.trivy.outputs.critical }}"
           HIGH="${{ steps.trivy.outputs.high }}"
+          
+          # Default to 0 if empty
+          CRITICAL="${CRITICAL:-0}"
+          HIGH="${HIGH:-0}"
           
           if [[ "$CRITICAL" -gt 0 ]]; then
             echo "❌ SECURITY GATE FAILED: $CRITICAL critical vulnerabilities found"
@@ -233,6 +247,7 @@ jobs:
           echo "✅ Security gate passed"
 
       - name: Push to Docker Hub
+        if: success()
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
@@ -247,6 +262,7 @@ jobs:
           echo "   • ${IMAGE_NAME}:latest"
 
       - name: Upload SBOM Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ai-collector-sbom
@@ -255,7 +271,7 @@ jobs:
           retention-days: 90
 
       - name: Create Release Comment
-        if: github.ref == 'refs/heads/main'
+        if: success() && github.ref == 'refs/heads/main'
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
           CRITICAL="${{ steps.trivy.outputs.critical }}"

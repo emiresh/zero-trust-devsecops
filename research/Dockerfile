@@ -1,6 +1,6 @@
 # Multi-stage build for AI Security Collector
 # Note: Using latest Debian base image. CVE-2026-0861 (glibc) - no fix available yet
-FROM python:3.12-slim-bookworm as builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # ============================================
 # Final stage
 # ============================================
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm AS final
 
 # Create non-root user
 RUN useradd -m -u 1000 -s /bin/bash collector && \
