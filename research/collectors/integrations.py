@@ -263,3 +263,4 @@ class WebhookIntegration:
         except Exception as e:
             logger.error(f"Custom webhook error: {e}", exc_info=True)
             return False
+        
