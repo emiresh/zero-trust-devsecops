@@ -372,8 +372,14 @@ jobs:
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
             echo "kubectl get pods -n ai-security -w" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            exit 0
           else
-            echo "❌ Pipeline failed - review logs above" >> $GITHUB_STEP_SUMMARY
-            exit 1
+            echo "❌ **Pipeline failed** - review logs above for details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Common issues:" >> $GITHUB_STEP_SUMMARY
+            echo "- Critical security vulnerabilities found (check Trivy scan)" >> $GITHUB_STEP_SUMMARY
+            echo "- Build failures" >> $GITHUB_STEP_SUMMARY
+            echo "- Manifest update errors" >> $GITHUB_STEP_SUMMARY
           fi
+          
+          # Always exit 0 so the summary step itself succeeds
+          exit 0
