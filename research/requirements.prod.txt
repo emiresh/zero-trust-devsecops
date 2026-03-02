@@ -1,25 +1,15 @@
 # Production Dependencies for AI Security Collector
-# Lean runtime-only packages (NO ML training dependencies)
-# Full ML stack in requirements.txt for future local development
+# MINIMAL - Only packages actually imported in code
+# No ML, no Jupyter, no unused HTTP clients
 
-# Web Framework
-fastapi>=0.115.6
-python-multipart>=0.0.22
+# Web Framework (used in falco_collector.py)
+fastapi==0.115.6
 uvicorn[standard]==0.32.0
 pydantic==2.9.0
-pydantic-settings==2.5.0
 
-# Prometheus Client (for metrics enrichment)
-prometheus-api-client==0.5.5
-prometheus-client==0.21.0
-
-# HTTP Clients
-httpx==0.27.2
-requests==2.32.3
-
-# Azure OpenAI (for incident reporting)
+# Azure OpenAI (used in incident_reporter.py)
 openai==1.51.0
 
-# Logging
-python-json-logger==2.0.7
-python-dateutil==2.9.0
+# Everything else is Python stdlib:
+# - json, os, logging, asyncio, datetime, pathlib, typing, collections
+
