@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 import json
+import os
 import asyncio
 import logging
 from collections import deque
@@ -50,7 +51,8 @@ stats = {
 }
 
 # Data directory (create if doesn't exist)
-DATA_DIR = Path("/tmp/ai-security-data")  # Local for now, will be /data in container
+# Use DATA_DIR env var in container, fall back to /tmp for local dev
+DATA_DIR = Path(os.getenv("DATA_DIR", "/tmp/ai-security-data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 EVENTS_FILE = DATA_DIR / "falco_events.jsonl"
 
