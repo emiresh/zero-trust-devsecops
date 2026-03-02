@@ -69,30 +69,26 @@ spec:
         
         # Environment variables
         env:
-        # Azure OpenAI credentials (from secret)
+        # Azure OpenAI credentials (from secret created by pipeline)
         - name: AZURE_OPENAI_ENDPOINT
           valueFrom:
             secretKeyRef:
-              name: azure-ai-credentials
-              key: AZURE_OPENAI_ENDPOINT
+              name: azure-openai-secret
+              key: endpoint
               optional: true  # Collector works without Azure AI
         
         - name: AZURE_OPENAI_KEY
           valueFrom:
             secretKeyRef:
-              name: azure-ai-credentials
-              key: AZURE_OPENAI_KEY
+              name: azure-openai-secret
+              key: api-key
               optional: true
         
-        - name: AZURE_OPENAI_MODEL
-          value: "gpt-4o-mini"
-        
-        # Azure Storage credentials (from secret)
-        - name: AZURE_STORAGE_CONNECTION_STRING
+        - name: AZURE_OPENAI_DEPLOYMENT
           valueFrom:
             secretKeyRef:
-              name: azure-ai-credentials
-              key: AZURE_STORAGE_CONNECTION_STRING
+              name: azure-openai-secret
+              key: deployment
               optional: true
         
         # Data directory

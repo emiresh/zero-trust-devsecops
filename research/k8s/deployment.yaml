@@ -72,6 +72,23 @@ spec:
         - name: DATA_DIR
           value: "/data"
         
+        # Azure OpenAI credentials (for AI-enhanced incident reports)
+        - name: AZURE_OPENAI_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: endpoint
+        - name: AZURE_OPENAI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: api-key
+        - name: AZURE_OPENAI_DEPLOYMENT
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: deployment
+        
         # Volume mounts
         volumeMounts:
         - name: data
