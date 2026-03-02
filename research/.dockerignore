@@ -1,0 +1,58 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+CHANGELOG*
+LICENSE*
+docs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Kubernetes manifests (not needed in image)
+k8s/
+helm/
+*.yaml
+!config.yaml
+
+# Scripts (not needed at runtime)
+setup_azure.sh
+test_*.py
+
+# Data files (mounted at runtime)
+*.jsonl
+*.json
+!config.yaml
+
+# Misc
+.DS_Store
+*.tmp

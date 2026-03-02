@@ -140,18 +140,21 @@ jobs:
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
           
           echo "🏗️ Building AI Security Collector (ARM64 for OCI cluster)..."
+          echo "📦 Using optimized production dependencies (no ML libraries)"
           
           cd research
           
           docker buildx build \
             --platform linux/arm64 \
             --load \
+            --cache-from type=registry,ref=${IMAGE_NAME}:buildcache \
+            --cache-to type=inline \
             -t "${IMAGE_NAME}:${TAG}" \
             -t "${IMAGE_NAME}:latest" \
             .
           
           echo "full_image=${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
-          echo "✅ Build completed"
+          echo "✅ Build completed with layer caching"
 
       - name: Generate SBOM (Software Bill of Materials)
         if: success()
