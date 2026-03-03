@@ -25,7 +25,7 @@ spec:
       
       containers:
       - name: collector
-        image: emiresh/ai-security-collector:v1.0.22
+        image: emiresh/ai-security-collector:v1.0.23
         imagePullPolicy: Always
         
         ports:
