@@ -65,7 +65,7 @@ spec:
         customRules:
           custom-rules.yaml: |-
             # Custom security rules for your cluster
-            
+
             # Detect shell spawned in container
             - rule: Shell Spawned in Container
               desc: A shell was spawned in a container
@@ -149,7 +149,7 @@ spec:
             # Additional outputs
             webhook:
               address: "http://ai-collector.ai-security:8000/events"
-              minimumpriority: "notice"
+              minimumpriority: "warning"
             
             # Custom fields to add to alerts
             customfields: "environment:production,cluster:test-cluster"
