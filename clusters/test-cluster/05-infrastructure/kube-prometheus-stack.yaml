@@ -140,7 +140,7 @@ spec:
                 pagerduty_configs:
                   - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
                     severity: critical
-                    description: '{{ .CommonAnnotations.summary }}'
+                    description: '{{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}Falco Security Alert: {{ .CommonLabels.alertname }}{{ end }}'
                     details:
                       firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
                       resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
@@ -155,7 +155,7 @@ spec:
                 pagerduty_configs:
                   - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
                     severity: warning
-                    description: '{{ .CommonAnnotations.summary }}'
+                    description: '{{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}Falco Security Alert: {{ .CommonLabels.alertname }}{{ end }}'
                     details:
                       firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
                       resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
