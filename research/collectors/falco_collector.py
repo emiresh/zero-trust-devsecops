@@ -104,8 +104,12 @@ async def _process_ai_and_notify(enriched_event: dict, priority: str, rule: str,
     Runs fully off the request/response path so Falcosidekick never
     waits on Azure OpenAI (which can take 2-10 seconds).
     """
-    container = enriched_event["metadata"]["container"]
-    namespace = enriched_event["metadata"]["namespace"]
+    metadata = enriched_event["metadata"]
+    container = metadata.get("container") or metadata.get("hostname", "host-level")
+    namespace = metadata.get("namespace") or "N/A"
+    pod = metadata.get("pod", "N/A")
+    process = metadata.get("process", "N/A")
+    hostname = metadata.get("hostname", "N/A")
 
     if not _should_generate_report(rule, container):
         return
@@ -115,9 +119,12 @@ async def _process_ai_and_notify(enriched_event: dict, priority: str, rule: str,
             "falco_rule": rule,
             "container": container,
             "namespace": namespace,
+            "pod": pod,
+            "process": process,
+            "hostname": hostname,
             "risk_level": priority,
             "risk_score": 0.9 if priority == "Critical" else 0.7 if priority == "Error" else 0.5,
-            "behavioral_context": enriched_event["metadata"]["output"],
+            "behavioral_context": metadata["output"],
             "anomaly_score": 0.0,
         }
 
@@ -132,6 +139,9 @@ async def _process_ai_and_notify(enriched_event: dict, priority: str, rule: str,
                 "rule": rule,
                 "container": container,
                 "namespace": namespace,
+                "pod": pod,
+                "process": process,
+                "hostname": hostname,
                 "ai_report": report,
                 "event_id": stats["total_events"],
             }
@@ -171,6 +181,12 @@ async def receive_falco_event(request: Request):
         output = event_data.get("output", "")
         
         # Create enriched event record
+        # Extract container/k8s context from output_fields (may be null for host-level events)
+        output_fields = event_data.get("output_fields", {})
+        container_name = output_fields.get("container.name") or output_fields.get("container.id", "")
+        namespace_name = output_fields.get("k8s.ns.name") or output_fields.get("k8s.pod.namespace", "")
+        pod_name = output_fields.get("k8s.pod.name", "")
+        
         enriched_event = {
             "timestamp": timestamp,
             "collector_received": datetime.now(timezone.utc).isoformat(),
@@ -180,9 +196,13 @@ async def receive_falco_event(request: Request):
                 "priority": priority,
                 "rule": rule,
                 "output": output,
-                "container": event_data.get("output_fields", {}).get("container.name", "unknown"),
-                "image": event_data.get("output_fields", {}).get("container.image.repository", "unknown"),
-                "namespace": event_data.get("output_fields", {}).get("k8s.ns.name", "unknown")
+                "container": container_name if container_name else None,
+                "image": output_fields.get("container.image.repository") or None,
+                "namespace": namespace_name if namespace_name else None,
+                "pod": pod_name if pod_name else None,
+                "hostname": output_fields.get("hostname") or output_fields.get("host", None),
+                "process": output_fields.get("proc.name") or output_fields.get("proc.cmdline", "")[:100] if output_fields.get("proc.cmdline") else None,
+                "user": output_fields.get("user.name") or None
             }
         }
         

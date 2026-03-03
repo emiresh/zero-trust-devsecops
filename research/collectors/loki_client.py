@@ -135,13 +135,20 @@ class LokiClient:
     async def push_falco_event(self, event: Dict[str, Any]) -> bool:
         """Push a raw Falco event under the 'falco_event' stream type."""
         meta = event.get("metadata", {})
+        
+        # Build labels, using enriched metadata fields
+        # Use "host-level" for events without container context
+        container = meta.get("container") or meta.get("hostname", "host-level")
+        namespace = meta.get("namespace") or "none"
+        
         labels = {
             "job":       "ai-security-collector",
             "type":      "falco_event",
             "priority":  meta.get("priority", "unknown"),
             "rule":      meta.get("rule", "unknown")[:64],   # Loki label length limit
-            "namespace": meta.get("namespace", "unknown"),
-            "container": meta.get("container", "unknown"),
+            "namespace": namespace,
+            "container": container[:63] if container else "none",  # Loki label length limit
+            "hostname":  (meta.get("hostname") or "unknown")[:63],
         }
         return await self.push(labels, event)
 
@@ -154,13 +161,18 @@ class LokiClient:
         Metadata (rule, priority, container, etc.) goes into stream labels
         and a compact JSON header prepended to the line.
         """
+        # Use enriched fields with fallbacks
+        container = ai_record.get("container") or ai_record.get("hostname", "host-level")
+        namespace = ai_record.get("namespace") or "none"
+        
         labels = {
             "job":       "ai-security-collector",
             "type":      "ai_report",
             "priority":  ai_record.get("priority", "unknown"),
             "rule":      str(ai_record.get("rule", "unknown"))[:64],
-            "namespace": ai_record.get("namespace", "unknown"),
-            "container": ai_record.get("container", "unknown"),
+            "namespace": namespace,
+            "container": container[:63] if container else "none",
+            "hostname":  (ai_record.get("hostname") or "unknown")[:63],
         }
 
         ai_text = ai_record.get("ai_report", "No report generated")
@@ -172,8 +184,11 @@ class LokiClient:
             "event_timestamp": ai_record.get("event_timestamp"),
             "rule":            ai_record.get("rule"),
             "priority":        ai_record.get("priority"),
-            "container":       ai_record.get("container"),
-            "namespace":       ai_record.get("namespace"),
+            "container":       container,
+            "namespace":       namespace,
+            "pod":             ai_record.get("pod"),
+            "process":         ai_record.get("process"),
+            "hostname":        ai_record.get("hostname"),
         }
         log_line = f"{json.dumps(meta)}\n\n{ai_text}"
 
