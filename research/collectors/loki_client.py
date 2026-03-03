@@ -35,7 +35,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Default: standard Loki single-binary service in monitoring namespace
-LOKI_URL = os.getenv("LOKI_URL", "http://loki.monitoring:3100")
+LOKI_URL = os.getenv("LOKI_URL", "http://loki-stack.monitoring:3100")
 LOKI_PUSH_PATH = "/loki/api/v1/push"
 LOKI_TIMEOUT_SECONDS = 5.0
 
