@@ -111,6 +111,138 @@ spec:
               priority: CRITICAL
               tags: [process, mitre_impact]
             
+            # Detect sensitive file reads
+            - rule: Read Sensitive File
+              desc: Detect reads of sensitive files like /etc/shadow, /etc/passwd, private keys
+              condition: >
+                open_read and
+                fd.name in (/etc/shadow, /etc/passwd, /etc/sudoers, /root/.ssh/id_rsa,
+                            /root/.ssh/id_dsa, /root/.aws/credentials, /root/.kube/config)
+              output: >
+                Sensitive file read (user=%user.name file=%fd.name
+                container=%container.name command=%proc.cmdline
+                image=%container.image.repository)
+              priority: WARNING
+              tags: [filesystem, mitre_credential_access]
+            
+            # Detect privilege escalation
+            - rule: Privilege Escalation via Setuid
+              desc: Detect privilege escalation attempts using setuid
+              condition: >
+                evt.type = setuid and
+                evt.dir = > and
+                evt.arg.uid = 0
+              output: >
+                Privilege escalation to root detected (user=%user.name
+                command=%proc.cmdline container=%container.name
+                parent=%proc.pname)
+              priority: CRITICAL
+              tags: [process, mitre_privilege_escalation]
+            
+            # Detect reverse shells
+            - rule: Reverse Shell
+              desc: Detect common reverse shell patterns
+              condition: >
+                spawned_process and
+                ((proc.name in (nc, ncat, netcat, socat) and
+                  (proc.cmdline contains "-e" or proc.cmdline contains "/bin/sh" or
+                   proc.cmdline contains "/bin/bash")) or
+                 (proc.name in (python, python3) and
+                  proc.cmdline contains "socket" and
+                  proc.cmdline contains "subprocess") or
+                 (proc.name in (perl, ruby, php) and
+                  proc.cmdline contains "socket"))
+              output: >
+                Reverse shell detected (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [network, shell, mitre_execution]
+            
+            # Detect container escape attempts
+            - rule: Container Escape Attempt
+              desc: Detect attempts to escape container
+              condition: >
+                spawned_process and
+                container and
+                (proc.cmdline contains "nsenter" or
+                 proc.cmdline contains "docker" or
+                 proc.cmdline contains "runc" or
+                 proc.name in (nsenter, docker, runc, ctr, crictl))
+              output: >
+                Container escape attempt (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [container, mitre_privilege_escalation]
+            
+            # Detect suspicious network activity
+            - rule: Outbound Connection to Suspicious Port
+              desc: Detect connections to commonly exploited ports
+              condition: >
+                evt.type = connect and
+                evt.dir = < and
+                fd.sport in (22, 23, 445, 3389, 4444, 5555, 6666, 7777, 8888, 9999) and
+                not fd.sip in (127.0.0.1, "::1")
+              output: >
+                Suspicious outbound connection (port=%fd.sport process=%proc.name
+                command=%proc.cmdline container=%container.name
+                destination=%fd.sip:%fd.sport)
+              priority: WARNING
+              tags: [network, mitre_command_and_control]
+            
+            # Detect suspicious file modifications
+            - rule: Suspicious File Modification
+              desc: Detect modifications to system files
+              condition: >
+                open_write and
+                fd.name in (/etc/passwd, /etc/shadow, /etc/sudoers, /etc/hosts,
+                            /root/.ssh/authorized_keys, /etc/crontab)
+              output: >
+                Suspicious file modification (user=%user.name file=%fd.name
+                command=%proc.cmdline container=%container.name)
+              priority: CRITICAL
+              tags: [filesystem, mitre_persistence]
+            
+            # Detect reconnaissance activity
+            - rule: Network Reconnaissance
+              desc: Detect network scanning and reconnaissance
+              condition: >
+                spawned_process and
+                proc.name in (nmap, masscan, zmap, nc, netcat, ncat)
+              output: >
+                Network reconnaissance detected (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: WARNING
+              tags: [network, mitre_discovery]
+            
+            # Detect suspicious DNS queries
+            - rule: Suspicious DNS Query
+              desc: Detect DNS queries to suspicious domains
+              condition: >
+                evt.type = connect and
+                fd.sport = 53 and
+                (fd.sip contains "tor" or
+                 fd.sip contains "proxy" or
+                 fd.sip contains "vpn")
+              output: >
+                Suspicious DNS query (domain=%fd.sip process=%proc.name
+                container=%container.name)
+              priority: WARNING
+              tags: [network, mitre_command_and_control]
+            
+            # Detect data exfiltration
+            - rule: Large Data Transfer
+              desc: Detect potentially suspicious large data transfers
+              condition: >
+                evt.type = sendto and
+                evt.dir = > and
+                evt.arg.size > 10485760
+              output: >
+                Large data transfer detected (size=%evt.arg.size bytes
+                process=%proc.name destination=%fd.sip:%fd.sport
+                container=%container.name)
+              priority: WARNING
+              tags: [network, mitre_exfiltration]
+            
             # Detect reading sensitive files
             - macro: sensitive_files
               condition: >
