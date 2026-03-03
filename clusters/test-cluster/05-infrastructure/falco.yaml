@@ -110,6 +110,41 @@ spec:
                 command=%proc.cmdline container=%container.name)
               priority: CRITICAL
               tags: [process, mitre_impact]
+            
+            # Detect reading sensitive files
+            - macro: sensitive_files
+              condition: >
+                (fd.name startswith /etc/shadow or
+                 fd.name startswith /etc/sudoers or
+                 fd.name startswith /etc/pam.d or
+                 fd.name startswith /etc/security or
+                 fd.name startswith /root/.ssh or
+                 fd.name startswith /root/.aws or
+                 fd.name startswith /root/.kube or
+                 fd.name contains ".dockercfg" or
+                 fd.name contains "id_rsa" or
+                 fd.name contains "id_dsa" or
+                 fd.name contains "id_ed25519" or
+                 fd.name contains "known_hosts")
+            
+            - macro: trusted_containers
+              condition: >
+                (container.image.repository in (gcr.io/google_containers/hyperkube-amd64,
+                 gcr.io/google_containers/kube-proxy, k8s.gcr.io/kube-proxy,
+                 quay.io/coreos/flannel, calico/node))
+            
+            - rule: Read sensitive file untrusted
+              desc: Detect attempts to read sensitive files like passwords, ssh keys, or cloud credentials
+              condition: >
+                open_read and
+                sensitive_files and
+                not trusted_containers
+              output: >
+                Sensitive file opened for reading (user=%user.name user_uid=%user.uid
+                file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline
+                container=%container.name image=%container.image.repository:%container.image.tag)
+              priority: WARNING
+              tags: [filesystem, mitre_credential_access]
         
         # Service account
         serviceAccount:
