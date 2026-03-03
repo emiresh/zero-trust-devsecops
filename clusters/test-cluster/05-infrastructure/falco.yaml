@@ -140,6 +140,9 @@ spec:
               endpoint: "/api/v2/alerts"
               minimumpriority: "warning"
               checkcert: false
+              # Add summary annotation so PagerDuty never receives a blank description
+              # PagerDuty Events API v2 returns 400 if summary/description is empty
+              extraannotations: "summary:Falco Alert - %rule% (%priority%) in %k8s.ns.name%/%container.name%"
             
             # Slack integration (optional - direct from Falco)
             slack:
