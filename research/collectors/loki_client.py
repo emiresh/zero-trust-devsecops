@@ -146,7 +146,14 @@ class LokiClient:
         return await self.push(labels, event)
 
     async def push_ai_report(self, ai_record: Dict[str, Any]) -> bool:
-        """Push an AI-enriched incident report under the 'ai_report' stream type."""
+        """
+        Push an AI-enriched incident report under the 'ai_report' stream type.
+
+        The log LINE is the AI report text itself so Grafana renders it
+        as readable multi-line content instead of a raw JSON blob.
+        Metadata (rule, priority, container, etc.) goes into stream labels
+        and a compact JSON header prepended to the line.
+        """
         labels = {
             "job":       "ai-security-collector",
             "type":      "ai_report",
@@ -155,7 +162,42 @@ class LokiClient:
             "namespace": ai_record.get("namespace", "unknown"),
             "container": ai_record.get("container", "unknown"),
         }
-        return await self.push(labels, ai_record)
+
+        ai_text = ai_record.get("ai_report", "No report generated")
+
+        # Metadata header prepended so it appears at the top of the log entry
+        meta = {
+            "event_id":        ai_record.get("event_id"),
+            "timestamp":       ai_record.get("timestamp"),
+            "event_timestamp": ai_record.get("event_timestamp"),
+            "rule":            ai_record.get("rule"),
+            "priority":        ai_record.get("priority"),
+            "container":       ai_record.get("container"),
+            "namespace":       ai_record.get("namespace"),
+        }
+        log_line = f"{json.dumps(meta)}\n\n{ai_text}"
+
+        ts_ns = str(time.time_ns())
+        body = {
+            "streams": [
+                {
+                    "stream": {k: str(v) for k, v in labels.items()},
+                    "values": [[ts_ns, log_line]],
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=LOKI_TIMEOUT_SECONDS) as client:
+                r = await client.post(
+                    self.push_url,
+                    json=body,
+                    headers={"Content-Type": "application/json"},
+                )
+                return r.status_code in (200, 204)
+        except Exception as e:
+            logger.error(f"Loki push_ai_report error: {e}")
+            return False
 
     async def push_lifecycle(self, event_type: str, payload: Dict[str, Any]) -> bool:
         """Push a collector lifecycle event (startup/shutdown)."""
