@@ -23,11 +23,14 @@ import os
 import asyncio
 import logging
 from collections import deque
+from typing import Dict
 
 # Import AI incident reporter for enhanced security analysis
 from advisors.incident_reporter import IncidentReporter
 # Import integrations for sending AI reports to external platforms
 from collectors.integrations import SlackIntegration, WebhookIntegration
+# Import Loki client for structured log storage
+from collectors.loki_client import LokiClient
 
 # Configure logging
 logging.basicConfig(
@@ -71,6 +74,82 @@ logger.info(f"AI incident reporter initialized: {'enabled' if ai_reporter.enable
 # AI reports use Slack for team collaboration (15-20s with AI analysis)
 slack_integration = SlackIntegration()
 webhook_integration = WebhookIntegration()
+
+# Initialize Loki client for structured log storage
+loki_client = LokiClient()
+
+# ---------------------------------------------------------------------------
+# Deduplication: suppress repeated AI reports for the same rule+container
+# within a rolling window to avoid Azure OpenAI quota burn during event storms.
+# ---------------------------------------------------------------------------
+DEDUP_WINDOW_SECONDS = int(os.getenv("AI_DEDUP_WINDOW_SECONDS", "60"))
+_dedup_cache: Dict[str, datetime] = {}
+
+
+def _should_generate_report(rule: str, container: str) -> bool:
+    """Return True only if no report was generated for this rule+container recently."""
+    key = f"{rule}:{container}"
+    last = _dedup_cache.get(key)
+    if last and (datetime.now(timezone.utc) - last).total_seconds() < DEDUP_WINDOW_SECONDS:
+        logger.debug(f"Dedup suppressed AI report for '{rule}' on '{container}'")
+        return False
+    _dedup_cache[key] = datetime.now(timezone.utc)
+    return True
+
+
+async def _process_ai_and_notify(enriched_event: dict, priority: str, rule: str, timestamp: str) -> None:
+    """
+    Background task: generate AI report and send notifications.
+
+    Runs fully off the request/response path so Falcosidekick never
+    waits on Azure OpenAI (which can take 2-10 seconds).
+    """
+    container = enriched_event["metadata"]["container"]
+    namespace = enriched_event["metadata"]["namespace"]
+
+    if not _should_generate_report(rule, container):
+        return
+
+    try:
+        event_context = {
+            "falco_rule": rule,
+            "container": container,
+            "namespace": namespace,
+            "risk_level": priority,
+            "risk_score": 0.9 if priority == "Critical" else 0.7 if priority == "Error" else 0.5,
+            "behavioral_context": enriched_event["metadata"]["output"],
+            "anomaly_score": 0.0,
+        }
+
+        # Run synchronous Azure OpenAI call in a thread so it doesn't block the event loop
+        report = await asyncio.to_thread(ai_reporter.generate_report, event_context)
+
+        if report:
+            ai_record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "event_timestamp": timestamp,
+                "priority": priority,
+                "rule": rule,
+                "container": container,
+                "namespace": namespace,
+                "ai_report": report,
+                "event_id": stats["total_events"],
+            }
+
+            # --- Persist: Loki (primary) + JSONL (fallback) ---
+            loki_ok = await loki_client.push_ai_report(ai_record)
+            if not loki_ok:
+                with open(AI_REPORTS_FILE, "a") as f:
+                    f.write(json.dumps(ai_record) + "\n")
+
+            logger.info(f"AI report generated for {priority} event: {rule} (loki={'ok' if loki_ok else 'fallback-jsonl'})")
+
+            # Send notifications (already non-blocking create_tasks)
+            asyncio.create_task(slack_integration.send_report(ai_record))
+            asyncio.create_task(webhook_integration.send_report(ai_record))
+
+    except Exception as e:
+        logger.error(f"Failed to generate AI report: {e}", exc_info=True)
 
 
 @app.post("/events")
@@ -119,61 +198,28 @@ async def receive_falco_event(request: Request):
         # Log receipt (at DEBUG level to avoid spam)
         logger.debug(f"Received event: {rule} | {priority} | {output[:100]}")
         
-        # Append to file (immediate persistence for research data)
-        with open(EVENTS_FILE, "a") as f:
-            f.write(json.dumps(enriched_event) + "\n")
-        
-        # Generate AI-enhanced incident report for HIGH/CRITICAL events
-        ai_report_generated = False
+        # --- Persist raw event: Loki (primary) + JSONL (fallback) ---
+        loki_ok = await loki_client.push_falco_event(enriched_event)
+        if not loki_ok:
+            with open(EVENTS_FILE, "a") as f:
+                f.write(json.dumps(enriched_event) + "\n")
+
+        # Kick off AI enrichment in the background — webhook returns immediately.
+        # Dedup logic inside _process_ai_and_notify prevents storm flooding.
+        ai_queued = False
         if priority in ["Critical", "Error", "Warning"] and ai_reporter.enabled:
-            try:
-                # Build context for AI analysis
-                event_context = {
-                    "falco_rule": rule,
-                    "container": enriched_event["metadata"]["container"],
-                    "namespace": enriched_event["metadata"]["namespace"],
-                    "risk_level": priority,
-                    "risk_score": 0.9 if priority == "Critical" else 0.7 if priority == "Error" else 0.5,
-                    "behavioral_context": output,
-                    "anomaly_score": 0.0  # Future: ML-based anomaly detection
-                }
-                
-                # Generate AI report using Azure OpenAI
-                report = ai_reporter.generate_report(event_context)
-                
-                if report:
-                    ai_record = {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "event_timestamp": timestamp,
-                        "priority": priority,
-                        "rule": rule,
-                        "container": enriched_event["metadata"]["container"],
-                        "namespace": enriched_event["metadata"]["namespace"],
-                        "ai_report": report,
-                        "event_id": stats["total_events"]
-                    }
-                    
-                    # Store AI report to separate file
-                    with open(AI_REPORTS_FILE, "a") as f:
-                        f.write(json.dumps(ai_record) + "\n")
-                    
-                    ai_report_generated = True
-                    logger.info(f"AI report generated for {priority} event: {rule}")
-                    
-                    # Send notifications to integrated platforms (async, non-blocking)
-                    # Note: PagerDuty alerts already sent via AlertManager (immediate, no AI)
-                    asyncio.create_task(slack_integration.send_report(ai_record))
-                    asyncio.create_task(webhook_integration.send_report(ai_record))
-            
-            except Exception as e:
-                logger.error(f"Failed to generate AI report: {e}", exc_info=True)
-        
+            asyncio.create_task(
+                _process_ai_and_notify(enriched_event, priority, rule, timestamp)
+            )
+            ai_queued = True
+
         return JSONResponse(
             status_code=200,
             content={
-                "status": "collected", 
+                "status": "collected",
                 "event_id": stats["total_events"],
-                "ai_report_generated": ai_report_generated
+                "loki_stored": loki_ok,
+                "ai_report_queued": ai_queued,
             }
         )
         
@@ -204,13 +250,24 @@ async def get_statistics():
     return {
         "statistics": stats,
         "buffer_size": len(event_buffer),
-        "events_file": str(EVENTS_FILE),
-        "events_file_exists": EVENTS_FILE.exists(),
-        "events_file_size_bytes": EVENTS_FILE.stat().st_size if EVENTS_FILE.exists() else 0,
-        "ai_reports_file": str(AI_REPORTS_FILE),
-        "ai_reports_file_exists": AI_REPORTS_FILE.exists(),
-        "ai_reports_file_size_bytes": AI_REPORTS_FILE.stat().st_size if AI_REPORTS_FILE.exists() else 0,
-        "ai_reporter_enabled": ai_reporter.enabled
+        "loki": {
+            "url": loki_client.url,
+            "enabled": loki_client.enabled,
+            "note": "Primary store. JSONL files are fallback only.",
+        },
+        "dedup": {
+            "window_seconds": DEDUP_WINDOW_SECONDS,
+            "active_keys": len(_dedup_cache),
+        },
+        "jsonl_fallback": {
+            "events_file": str(EVENTS_FILE),
+            "events_file_exists": EVENTS_FILE.exists(),
+            "events_file_size_bytes": EVENTS_FILE.stat().st_size if EVENTS_FILE.exists() else 0,
+            "ai_reports_file": str(AI_REPORTS_FILE),
+            "ai_reports_file_exists": AI_REPORTS_FILE.exists(),
+            "ai_reports_file_size_bytes": AI_REPORTS_FILE.stat().st_size if AI_REPORTS_FILE.exists() else 0,
+        },
+        "ai_reporter_enabled": ai_reporter.enabled,
     }
 
 
@@ -361,15 +418,18 @@ async def startup_event():
     
     # Create data directory if it doesn't exist
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Log startup
-    startup_event = {
+
+    # Log startup to Loki (probe happens here) + JSONL fallback
+    startup_payload = {
         "event_type": "collector_startup",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "data_dir": str(DATA_DIR)
+        "data_dir": str(DATA_DIR),
     }
-    with open(EVENTS_FILE, "a") as f:
-        f.write(json.dumps(startup_event) + "\n")
+    loki_ok = await loki_client.push_lifecycle("collector_startup", startup_payload)
+    if not loki_ok:
+        with open(EVENTS_FILE, "a") as f:
+            f.write(json.dumps(startup_payload) + "\n")
+    logger.info(f"Loki storage: {'active' if loki_client.enabled else 'unavailable — using JSONL fallback'}")
 
 
 @app.on_event("shutdown")
@@ -379,13 +439,15 @@ async def shutdown_event():
     logger.info(f"Total events collected: {stats['total_events']}")
     
     # Final stats
-    shutdown_event = {
+    shutdown_payload = {
         "event_type": "collector_shutdown",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "total_events": stats["total_events"]
+        "total_events": stats["total_events"],
     }
-    with open(EVENTS_FILE, "a") as f:
-        f.write(json.dumps(shutdown_event) + "\n")
+    loki_ok = await loki_client.push_lifecycle("collector_shutdown", shutdown_payload)
+    if not loki_ok:
+        with open(EVENTS_FILE, "a") as f:
+            f.write(json.dumps(shutdown_payload) + "\n")
 
 
 if __name__ == "__main__":

@@ -69,6 +69,10 @@ spec:
         env:
         - name: PROMETHEUS_URL
           value: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+        - name: LOKI_URL
+          value: "http://loki.monitoring:3100"
+        - name: AI_DEDUP_WINDOW_SECONDS
+          value: "60"
         - name: DATA_DIR
           value: "/data"
         
