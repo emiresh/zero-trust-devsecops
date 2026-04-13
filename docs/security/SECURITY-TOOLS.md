@@ -535,7 +535,7 @@ Critical security events trigger PagerDuty alerts:
 ```bash
 # Trivy
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  aquasec/trivy image youruser/frontend:latest
+  ghcr.io/aquasecurity/trivy:0.69.3 image youruser/frontend:latest
 
 # npm audit
 cd src/frontend

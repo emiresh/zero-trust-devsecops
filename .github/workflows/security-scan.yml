@@ -42,6 +42,7 @@ permissions:
 env:
   DOCKER_REGISTRY: docker.io
   IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}
+  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.69.3
 
 jobs:
   # ==========================================
@@ -78,7 +79,7 @@ jobs:
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$(pwd):/workspace" \
-            aquasec/trivy:latest image \
+            ${{ env.TRIVY_IMAGE }} image \
             --format json \
             --output /workspace/trivy-${{ matrix.service }}.json \
             --severity CRITICAL,HIGH,MEDIUM,LOW \

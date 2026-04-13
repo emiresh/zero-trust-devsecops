@@ -31,7 +31,7 @@ gh run view
 gh workflow run security-scan.yml
 
 # View Trivy results locally
-docker run --rm aquasec/trivy image docker.io/youruser/frontend:latest
+docker run --rm ghcr.io/aquasecurity/trivy:0.69.3 image docker.io/youruser/frontend:latest
 ```
 
 ### Secret Rotation

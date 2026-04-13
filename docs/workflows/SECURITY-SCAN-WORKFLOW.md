@@ -73,7 +73,7 @@ matrix:
 docker pull $DOCKER_USERNAME/freshbonds-$SERVICE:latest
 
 # 2. Run Trivy scan
-docker run aquasec/trivy:latest image \
+docker run ghcr.io/aquasecurity/trivy:0.69.3 image \
   --format json \
   --output trivy-$SERVICE.json \
   --severity CRITICAL,HIGH,MEDIUM,LOW \
@@ -395,7 +395,7 @@ Error: failed to scan image: context deadline exceeded
 **Solution**:
 ```bash
 # Increase timeout in workflow
-docker run aquasec/trivy:latest image \
+docker run ghcr.io/aquasecurity/trivy:0.69.3 image \
   --timeout 15m \
   ...
 ```
