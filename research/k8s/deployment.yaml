@@ -20,8 +20,12 @@ spec:
       # Security context (non-root, no privileges)
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: 10001  # High UID to avoid host conflict (CKV_K8S_40)
+        fsGroup: 10001
+        seccompProfile:  # CKV_K8S_31: Seccomp profile required
+          type: RuntimeDefault
+      serviceAccountName: ai-security-collector
+      automountServiceAccountToken: false  # CKV_K8S_38: Only mount when necessary
       
       containers:
       - name: collector
@@ -135,3 +139,74 @@ spec:
   resources:
     requests:
       storage: 5Gi  # Enough for ~1M Falco events
+---
+# NetworkPolicy to satisfy CKV2_K8S_6
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-security-collector-policy
+  namespace: ai-security
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-security-collector
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow Prometheus (metrics scraping)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow Loki (log aggregation)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: loki-stack
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3100
+  # Allow Azure OpenAI API (external egress)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# ServiceAccount for ai-security-collector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-security-collector
+  namespace: ai-security
+automountServiceAccountToken: false
