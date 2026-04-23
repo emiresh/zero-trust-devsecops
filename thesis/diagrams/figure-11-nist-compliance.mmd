@@ -1,0 +1,36 @@
+graph LR
+    subgraph "NIST SP 800-207 Tenets"
+        T1[Tenet 1<br/>Resources]
+        T2[Tenet 2<br/>Communication]
+        T3[Tenet 3<br/>Per-Session]
+        T4[Tenet 4<br/>Dynamic Policy]
+        T5[Tenet 5<br/>Monitoring]
+        T6[Tenet 6<br/>Auth/Authz]
+        T7[Tenet 7<br/>Posture Improvement]
+    end
+
+    subgraph "Implementation Controls"
+        C1[K8s Security Contexts<br/>Per-Resource Policy]
+        C2[TLS Ingress<br/>MongoDB TLS<br/>cert-manager]
+        C3[JWT 8h Expiry<br/>No Persistent Sessions]
+        C4[Kyverno 9 Rules<br/>OPA 16 Rules<br/>Falco 14 Rules]
+        C5[Prometheus 22 Rules<br/>Falco 13 Rules<br/>Monthly Scans]
+        C6[JWT Validation<br/>Ownership Middleware<br/>K8s RBAC]
+        C7[Loki + Grafana<br/>AI Reports<br/>SBOM + Rotation Logs]
+    end
+
+    T1 --> C1
+    T2 --> C2
+    T3 --> C3
+    T4 --> C4
+    T5 --> C5
+    T6 --> C6
+    T7 --> C7
+
+    style T1 fill:#22c55e,color:#fff
+    style T2 fill:#22c55e,color:#fff
+    style T3 fill:#22c55e,color:#fff
+    style T4 fill:#22c55e,color:#fff
+    style T5 fill:#22c55e,color:#fff
+    style T6 fill:#22c55e,color:#fff
+    style T7 fill:#22c55e,color:#fff
