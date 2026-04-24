@@ -315,7 +315,7 @@ spec:
             # Additional outputs
             webhook:
               address: "http://ai-collector.ai-security:8000/events"
-              minimumpriority: "warning"
+              minimumpriority: "error"
             
             # Custom fields to add to alerts
             customfields: "environment:production,cluster:test-cluster"

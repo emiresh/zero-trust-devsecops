@@ -227,7 +227,7 @@ async def receive_falco_event(request: Request):
         # Kick off AI enrichment in the background — webhook returns immediately.
         # Dedup logic inside _process_ai_and_notify prevents storm flooding.
         ai_queued = False
-        if priority in ["Critical", "Error", "Warning"] and ai_reporter.enabled:
+        if priority in ["Critical", "Error"] and ai_reporter.enabled:
             asyncio.create_task(
                 _process_ai_and_notify(enriched_event, priority, rule, timestamp)
             )
