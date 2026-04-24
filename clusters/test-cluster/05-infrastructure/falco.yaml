@@ -130,7 +130,6 @@ spec:
               desc: Detect privilege escalation attempts using setuid
               condition: >
                 evt.type = setuid and
-                evt.dir = > and
                 evt.arg.uid = 0
               output: >
                 Privilege escalation to root detected (user=%user.name
@@ -179,7 +178,6 @@ spec:
               desc: Detect connections to commonly exploited ports
               condition: >
                 evt.type = connect and
-                evt.dir = < and
                 fd.sport in (22, 23, 445, 3389, 4444, 5555, 6666, 7777, 8888, 9999) and
                 not fd.sip in (127.0.0.1, "::1")
               output: >
@@ -216,13 +214,14 @@ spec:
             
             # Detect suspicious DNS queries
             - rule: Suspicious DNS Query
-              desc: Detect DNS queries to suspicious domains
+              desc: Detect DNS queries to suspicious destinations
               condition: >
                 evt.type = connect and
                 fd.sport = 53 and
-                (fd.sip contains "tor" or
-                 fd.sip contains "proxy" or
-                 fd.sip contains "vpn")
+                fd.sip.name != "" and
+                (fd.sip.name contains "tor" or
+                 fd.sip.name contains "proxy" or
+                 fd.sip.name contains "vpn")
               output: >
                 Suspicious DNS query (domain=%fd.sip process=%proc.name
                 container=%container.name)
@@ -234,7 +233,6 @@ spec:
               desc: Detect potentially suspicious large data transfers
               condition: >
                 evt.type = sendto and
-                evt.dir = > and
                 evt.arg.size > 10485760
               output: >
                 Large data transfer detected (size=%evt.arg.size bytes
