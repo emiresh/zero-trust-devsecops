@@ -212,19 +212,18 @@ spec:
               priority: WARNING
               tags: [network, mitre_discovery]
             
-            # Detect suspicious DNS queries
+            # Detect suspicious DNS tools in containers
             - rule: Suspicious DNS Query
-              desc: Detect DNS queries to suspicious destinations
+              desc: Detect use of DNS lookup tools inside containers
               condition: >
-                evt.type = connect and
-                fd.sport = 53 and
-                fd.sip.name != "" and
-                (fd.sip.name contains "tor" or
-                 fd.sip.name contains "proxy" or
-                 fd.sip.name contains "vpn")
+                spawned_process and
+                container and
+                proc.name in (dig, nslookup, host) and
+                not k8s.ns.name in (kube-system)
               output: >
-                Suspicious DNS query (domain=%fd.sip process=%proc.name
-                container=%container.name)
+                Suspicious DNS tool executed in container (user=%user.name
+                command=%proc.cmdline container=%container.name
+                image=%container.image.repository)
               priority: WARNING
               tags: [network, mitre_command_and_control]
             
@@ -232,10 +231,12 @@ spec:
             - rule: Large Data Transfer
               desc: Detect potentially suspicious large data transfers
               condition: >
-                evt.type = sendto and
-                evt.arg.size > 10485760
+                evt.type = write and
+                fd.type = ipv4 and
+                evt.rawres > 1048576 and
+                not k8s.ns.name in (kube-system, kube-flannel, monitoring)
               output: >
-                Large data transfer detected (size=%evt.arg.size bytes
+                Large data transfer detected (size=%evt.rawres bytes
                 process=%proc.name destination=%fd.sip:%fd.sport
                 container=%container.name)
               priority: WARNING
