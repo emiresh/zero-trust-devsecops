@@ -1,1726 +1,1358 @@
-# Automating Continuous Compliance in DevSecOps Through Zero Trust
-
----
-
-**A Thesis Submitted in Partial Fulfillment of the Requirements for the Degree of Master of Science**
-
----
-
-**Author:** Iresh Emalsha  
-**Date:** March 2026  
-**Institution:** [University Name]  
-**Department:** [Department of Computer Science / Cybersecurity]  
-**Supervisor:** [Supervisor Name]
-
----
-
-## Abstract
-
-Cloud-native application development has fundamentally reshaped how organisations build, deploy, and operate software systems. However, the velocity of microservice deployments on Kubernetes orchestration platforms has outpaced the ability of traditional security models to maintain continuous compliance. Perimeter-based security architectures, which assume implicit trust within the network boundary, are structurally incompatible with the ephemeral, distributed nature of containerised workloads. This thesis presents a comprehensive Zero-Trust DevSecOps framework that automates continuous compliance across six security layers: infrastructure, platform, application, CI/CD pipeline, runtime, and observability. The framework is implemented as a production-deployed system called **FreshBonds** — a microservices e-commerce platform running on a three-node Kubernetes cluster on Oracle Cloud Infrastructure (OCI), secured by 39 automated policy rules (Kyverno, Open Policy Agent, Falco), six specialised GitHub Actions CI/CD pipelines integrating 10 security tools (Trivy, Checkov, Gitleaks, Syft, OPA/Conftest, Kyverno CLI, kubeval, npm audit, SealedSecrets, and Falco), and an AI-augmented security monitoring layer that enriches runtime security events through Azure OpenAI GPT-4o-mini. The implementation demonstrates that continuous compliance can be achieved through policy-as-code enforcement at every stage of the software delivery lifecycle, automated secret rotation, supply chain integrity verification via Software Bill of Materials (SBOM) generation, and real-time runtime threat detection mapped to the MITRE ATT&CK framework. The evaluation against NIST SP 800-207 Zero Trust Architecture principles shows compliance across 12 of 14 core tenets, with the framework blocking 100% of deployments containing CRITICAL Common Vulnerabilities and Exposures (CVEs) and detecting runtime security events within 30 seconds through eBPF-based kernel instrumentation. The thesis contributes a reproducible reference architecture, a multi-pipeline security integration model, and a quantitative compliance mapping methodology that organisations can adopt for their own cloud-native security implementations.
-
-**Keywords:** Zero Trust Architecture, DevSecOps, Continuous Compliance, Kubernetes Security, Policy-as-Code, GitOps, SBOM, Runtime Security, MITRE ATT&CK, AI-Augmented Security Monitoring
-
----
-
-## Table of Contents
-
-1. [Introduction](#chapter-1-introduction)
-   - 1.1 [Background and Context](#11-background-and-context)
-   - 1.2 [Problem Statement](#12-problem-statement)
-   - 1.3 [Research Questions](#13-research-questions)
-   - 1.4 [Research Objectives](#14-research-objectives)
-   - 1.5 [Scope and Limitations](#15-scope-and-limitations)
-   - 1.6 [Thesis Structure](#16-thesis-structure)
-2. [Literature Review](#chapter-2-literature-review)
-   - 2.1 [Zero Trust Architecture](#21-zero-trust-architecture)
-   - 2.2 [DevSecOps Principles and Practices](#22-devsecops-principles-and-practices)
-   - 2.3 [Continuous Compliance in Cloud-Native Systems](#23-continuous-compliance-in-cloud-native-systems)
-   - 2.4 [Kubernetes Security Landscape](#24-kubernetes-security-landscape)
-   - 2.5 [Policy-as-Code and Admission Control](#25-policy-as-code-and-admission-control)
-   - 2.6 [Software Supply Chain Security](#26-software-supply-chain-security)
-   - 2.7 [Runtime Security and eBPF](#27-runtime-security-and-ebpf)
-   - 2.8 [AI-Augmented Security Operations](#28-ai-augmented-security-operations)
-   - 2.9 [Research Gap Analysis](#29-research-gap-analysis)
-3. [Methodology](#chapter-3-methodology)
-   - 3.1 [Research Approach](#31-research-approach)
-   - 3.2 [Design Science Research Framework](#32-design-science-research-framework)
-   - 3.3 [System Design Methodology](#33-system-design-methodology)
-   - 3.4 [Implementation Strategy](#34-implementation-strategy)
-   - 3.5 [Evaluation Criteria](#35-evaluation-criteria)
-   - 3.6 [Ethical Considerations](#36-ethical-considerations)
-4. [System Architecture and Design](#chapter-4-system-architecture-and-design)
-   - 4.1 [Architecture Overview](#41-architecture-overview)
-   - 4.2 [Infrastructure Layer Design](#42-infrastructure-layer-design)
-   - 4.3 [Kubernetes Platform Layer](#43-kubernetes-platform-layer)
-   - 4.4 [Application Layer Architecture](#44-application-layer-architecture)
-   - 4.5 [Security Architecture](#45-security-architecture)
-   - 4.6 [GitOps and CI/CD Architecture](#46-gitops-and-cicd-architecture)
-   - 4.7 [Observability Architecture](#47-observability-architecture)
-   - 4.8 [AI-Augmented Security Monitoring](#48-ai-augmented-security-monitoring)
-5. [Implementation](#chapter-5-implementation)
-   - 5.1 [Infrastructure Provisioning with Terraform](#51-infrastructure-provisioning-with-terraform)
-   - 5.2 [Kubernetes Cluster Configuration](#52-kubernetes-cluster-configuration)
-   - 5.3 [Microservices Implementation](#53-microservices-implementation)
-   - 5.4 [CI/CD Pipeline Implementation](#54-cicd-pipeline-implementation)
-   - 5.5 [Policy-as-Code Implementation](#55-policy-as-code-implementation)
-   - 5.6 [Secret Management and Rotation](#56-secret-management-and-rotation)
-   - 5.7 [Runtime Security Implementation](#57-runtime-security-implementation)
-   - 5.8 [Monitoring and Alerting Implementation](#58-monitoring-and-alerting-implementation)
-   - 5.9 [AI Security Collector Implementation](#59-ai-security-collector-implementation)
-6. [Evaluation and Results](#chapter-6-evaluation-and-results)
-   - 6.1 [NIST SP 800-207 Compliance Mapping](#61-nist-sp-800-207-compliance-mapping)
-   - 6.2 [Pipeline Security Gate Effectiveness](#62-pipeline-security-gate-effectiveness)
-   - 6.3 [Policy Enforcement Coverage](#63-policy-enforcement-coverage)
-   - 6.4 [Runtime Detection Capability Assessment](#64-runtime-detection-capability-assessment)
-   - 6.5 [MITRE ATT&CK Coverage Analysis](#65-mitre-attck-coverage-analysis)
-   - 6.6 [Supply Chain Security Assessment](#66-supply-chain-security-assessment)
-   - 6.7 [Compliance Automation Metrics](#67-compliance-automation-metrics)
-   - 6.8 [AI Enrichment Value Assessment](#68-ai-enrichment-value-assessment)
-7. [Discussion](#chapter-7-discussion)
-   - 7.1 [Key Findings](#71-key-findings)
-   - 7.2 [Research Question Answers](#72-research-question-answers)
-   - 7.3 [Comparison with Existing Approaches](#73-comparison-with-existing-approaches)
-   - 7.4 [Limitations and Threats to Validity](#74-limitations-and-threats-to-validity)
-   - 7.5 [Implications for Practice](#75-implications-for-practice)
-8. [Conclusion and Future Work](#chapter-8-conclusion-and-future-work)
-   - 8.1 [Summary of Contributions](#81-summary-of-contributions)
-   - 8.2 [Future Work](#82-future-work)
-   - 8.3 [Closing Remarks](#83-closing-remarks)
-9. [References](#references)
-10. [Appendices](#appendices)
-    - A. [Complete Security Tool Configuration Matrix](#appendix-a-complete-security-tool-configuration-matrix)
-    - B. [Kyverno and OPA Policy Specifications](#appendix-b-kyverno-and-opa-policy-specifications)
-    - C. [Falco Custom Rules with MITRE Mapping](#appendix-c-falco-custom-rules-with-mitre-mapping)
-    - D. [CI/CD Pipeline Specifications](#appendix-d-cicd-pipeline-specifications)
-    - E. [Grafana Dashboard and Alert Configurations](#appendix-e-grafana-dashboard-and-alert-configurations)
+**Automating Continuous Compliance in DevSecOps**  
+**Through Zero Trust**
 
----
+EMIM Ekanayaka
 
-## Chapter 1: Introduction
+Master of Information Security (MIS)
 
-### 1.1 Background and Context
+# **Declaration**
 
-The software industry is undergoing a fundamental transformation driven by cloud-native technologies. Organisations are increasingly adopting microservice architectures deployed on container orchestration platforms such as Kubernetes, replacing monolithic applications with distributed systems that offer superior scalability, resilience, and development velocity (Burns et al., 2016). According to the Cloud Native Computing Foundation (CNCF) Annual Survey 2024, 96% of organisations are either using or evaluating Kubernetes, with 79% running production workloads on the platform (CNCF, 2024).
+I declare that this final report is my own work and that the implementation, analysis, and written discussion are based on the Zero-Trust DevSecOps project contained in the [zero-trust-devsecops](https://github.com/emiresh/zero-trust-devsecops) repository. All external sources used to support the background, related work, and technical discussion are cited in the text and listed in the references using Harvard referencing style. Repository artefacts such as workflow files, Kubernetes manifests, Terraform definitions, policy files, and service implementations are used as primary project evidence. No part of this work has been submitted for any other assessment or degree programme.
 
-This architectural shift has created a corresponding security paradigm challenge. Traditional perimeter-based security models, built on the assumption that entities within the network boundary can be trusted, are structurally incompatible with cloud-native environments where workloads are ephemeral, communication patterns are dynamic, and the traditional network perimeter has dissolved (Kindervag, 2010). A single Kubernetes cluster may deploy and terminate hundreds of containers per hour, each requiring identity verification, network policy enforcement, and compliance validation.
+**Signed:** Iresh Ekanayaka
 
-Simultaneously, regulatory pressure for continuous compliance has intensified. Frameworks such as the General Data Protection Regulation (GDPR), Payment Card Industry Data Security Standard (PCI DSS) v4.0, and SOC 2 Type II require organisations to demonstrate not merely point-in-time compliance but ongoing, verifiable security posture (PCI SSC, 2022). The gap between deployment velocity and compliance verification has become a critical business and security risk.
+**Date:** April 2026
 
-Zero Trust Architecture (ZTA), formalised by the National Institute of Standards and Technology (NIST) in Special Publication 800-207, provides a principled framework for addressing this gap. ZTA eliminates implicit trust, mandates continuous verification of every request, enforces least-privilege access, and assumes breach as a default posture (Rose et al., 2020). When combined with DevSecOps practices — which integrate security into every phase of the software delivery lifecycle — ZTA principles can be operationalised as automated, continuous compliance controls.
+# **Acknowledgements**
 
-This thesis presents the design, implementation, and evaluation of a complete Zero-Trust DevSecOps framework that automates continuous compliance across all layers of a cloud-native application platform. The framework is not a theoretical construct but a production-deployed system running real workloads on Oracle Cloud Infrastructure.
+I would like to express my sincere gratitude to my supervisor, lecturers, and peers for their guidance, constructive feedback, and encouragement throughout this project. I am particularly thankful for the support received during the design and evaluation phases of this work.
 
-### 1.2 Problem Statement
+I also acknowledge the maintainers and communities of the open-source tools and platforms used in this implementation, including Kubernetes, Open Policy Agent, Kyverno, Falco, Trivy, Checkov, Syft, Sealed Secrets, Prometheus, Grafana, Loki, Argo CD, and Terraform. Their contributions to the cloud-native ecosystem have made this research possible.
 
-Despite growing adoption of both Zero Trust principles and DevSecOps practices, several critical challenges remain unresolved:
+Finally, I would like to thank Oracle for providing the Always Free Tier cloud infrastructure resources that enabled the production deployment of this project, and Microsoft for the Azure OpenAI Service credits used in the AI-augmented security monitoring component.
 
-1. **Fragmented Security Tooling**: Organisations deploy security tools in isolation — vulnerability scanners in CI pipelines, admission controllers in the cluster, and runtime monitors separately — without a unifying compliance framework that ensures no security layer is bypassed (Myrbakken & Colomo-Palacios, 2017).
+# **Abstract**
 
-2. **Manual Compliance Verification**: Compliance assessments remain predominantly manual, conducted periodically (quarterly or annually), creating windows of non-compliance between assessments (Fitzgerald & Stol, 2017). This point-in-time approach is incompatible with continuous deployment practices.
+Cloud-native application development has fundamentally reshaped how organisations build, deploy, and operate software systems. However, the velocity of microservice deployments on Kubernetes orchestration platforms has outpaced the ability of traditional compliance teams to manually verify infrastructure, application, and runtime security controls. Perimeter-based security architectures, which assume implicit trust within the network boundary, are structurally incompatible with the ephemeral, distributed nature of containerised workloads. This creates a practical problem: security and compliance checks are often fragmented across separate scanners, Kubernetes policies, runtime monitors, and ticketing systems, leaving gaps between code review, deployment, and operations.
 
-3. **Disconnected Security Layers**: Infrastructure-as-Code (IaC) security scanning, container image vulnerability assessment, Kubernetes admission control, and runtime security monitoring operate as independent systems. A deployment may pass pipeline security checks but violate runtime policies, or vice versa (Souppaya et al., 2023).
+This project addresses that problem by designing and implementing a Zero-Trust DevSecOps framework for a Kubernetes-based microservices application called FreshBonds. The systematic approach uses the Design Science Research Methodology (DSRM) to construct and evaluate an artefact that combines GitOps-driven deployment, infrastructure as code, policy as code, container vulnerability scanning, automated secret rotation, runtime threat detection, and AI-assisted incident reporting. The framework is implemented as a production-deployed system running on a three-node Kubernetes cluster on Oracle Cloud Infrastructure (OCI), with automated policy enforcement, CI/CD security pipelines, and an AI-augmented security monitoring layer.
 
-4. **Secret Lifecycle Management**: Secrets are often deployed once and never rotated, creating a growing attack surface. Manual rotation processes are error-prone and disrupt service availability (Shamim et al., 2020).
+The major finding is that continuous compliance can be operationalised as a set of automated control points across the delivery lifecycle rather than as a periodic manual audit. Evaluation against NIST SP 800-207 Zero Trust Architecture principles demonstrates compliance across all seven core tenets, with the framework blocking one hundred per cent of deployments containing CRITICAL Common Vulnerabilities and Exposures (CVEs) and detecting runtime security events within thirty seconds. The contribution is a reproducible reference implementation that translates Zero Trust from a conceptual security model into concrete DevSecOps automation for Kubernetes.
 
-5. **Alert Fatigue and Context Deficiency**: Security monitoring systems generate high volumes of alerts without contextual enrichment, making it difficult for security teams to prioritise and respond effectively (Alahmadi et al., 2020).
+# **Table of Contents**
 
-### 1.3 Research Questions
+[**List of Figures**](#list-of-figures)
 
-This thesis addresses the following research questions:
+[**List of Tables**](#list-of-tables)
 
-- **RQ1:** How can Zero Trust principles be systematically implemented across all layers of a cloud-native DevSecOps platform to achieve continuous compliance?
+[**List of Abbreviations**](#list-of-abbreviations)
 
-- **RQ2:** What pipeline architecture and security tool integration model effectively prevents non-compliant deployments while maintaining developer velocity?
+[**1. Introduction**](#1-introduction)
 
-- **RQ3:** How can policy-as-code mechanisms (Kyverno, OPA) be combined with runtime security monitoring (Falco) to provide end-to-end compliance enforcement?
+[1.1 General Introduction to the Problem](#11-general-introduction-to-the-problem)
 
-- **RQ4:** To what extent can AI-augmented security event enrichment improve the operational utility of runtime security monitoring?
+[1.2 Problem Statement](#12-problem-statement)
 
-### 1.4 Research Objectives
+[1.3 Project Aims and Objectives](#13-project-aims-and-objectives)
 
-The research objectives corresponding to the research questions are:
+[1.4 Scope of the Project](#14-scope-of-the-project)
 
-1. **Design** a multi-layered Zero Trust architecture for cloud-native applications that maps to NIST SP 800-207 principles.
+[1.5 Research Questions](#15-research-questions)
 
-2. **Implement** an automated CI/CD pipeline architecture with integrated security gates that enforce compliance at every stage of the software delivery lifecycle.
+[1.6 Report Structure](#16-report-structure)
 
-3. **Deploy** policy-as-code mechanisms across build-time (CI/CD), deploy-time (admission control), and runtime (kernel-level monitoring) to achieve continuous compliance enforcement.
+[**2. Related Work**](#2-related-work)
 
-4. **Develop** an AI-augmented security monitoring component that enriches runtime security events with contextual threat analysis using Large Language Models (LLMs).
+[2.1 Literature Review Organisation](#21-literature-review-organisation)
 
-5. **Evaluate** the framework against NIST SP 800-207 compliance criteria, MITRE ATT&CK coverage, and operational effectiveness metrics.
+[2.2 Zero Trust Architecture](#22-zero-trust-architecture)
 
-### 1.5 Scope and Limitations
+[2.3 DevSecOps and Continuous Security](#23-devsecops-and-continuous-security)
 
-**In Scope:**
-- Complete infrastructure-to-application Zero Trust implementation on Oracle Cloud Infrastructure
-- Six-pipeline CI/CD architecture with 10 integrated security tools
-- Policy-as-code enforcement using Kyverno (9 rules) and OPA (16 rules) in CI/CD pipelines
-- Runtime security monitoring using Falco with 14 custom MITRE ATT&CK-mapped rules
-- Automated secret management with monthly rotation via SealedSecrets
-- AI-augmented security event enrichment using Azure OpenAI GPT-4o-mini
-- Full observability stack with Prometheus, Grafana, Loki, Promtail, and PagerDuty integration
+[2.4 Kubernetes Security and Policy Enforcement](#24-kubernetes-security-and-policy-enforcement)
 
-**Out of Scope:**
-- Machine learning-based anomaly detection models (planned as future work)
-- Multi-cluster federated security
-- Service mesh (Istio/Linkerd) mutual TLS implementation
-- Formal penetration testing results
-- Performance benchmarking under production traffic loads
+[2.5 Supply Chain Security](#25-supply-chain-security)
 
-### 1.6 Thesis Structure
+[2.6 Runtime Security Monitoring](#26-runtime-security-monitoring)
 
-The remainder of this thesis is organised as follows. Chapter 2 reviews the literature on Zero Trust Architecture, DevSecOps, policy-as-code, and runtime security. Chapter 3 describes the research methodology based on Design Science Research. Chapter 4 presents the system architecture and design decisions. Chapter 5 details the implementation across all security layers. Chapter 6 evaluates the framework against compliance criteria and effectiveness metrics. Chapter 7 discusses findings, limitations, and implications. Chapter 8 concludes with contributions summary and future work directions.
+[2.7 AI-Assisted Security Operations](#27-ai-assisted-security-operations)
 
----
+[2.8 Summary of Related Work](#28-summary-of-related-work)
 
-## Chapter 2: Literature Review
+[2.9 Identification of Research Gap](#29-identification-of-research-gap)
 
-### 2.1 Zero Trust Architecture
+[**3. Approach**](#3-approach)
 
-The concept of Zero Trust was introduced by Kindervag (2010) at Forrester Research as a fundamental challenge to the traditional "castle-and-moat" security model. The core principle — "never trust, always verify" — asserts that no entity, whether inside or outside the network perimeter, should be inherently trusted.
+[3.1 Systematic Approach](#31-systematic-approach)
 
-NIST formalised this approach in Special Publication 800-207, defining Zero Trust Architecture as "an enterprise's cybersecurity plan that utilises zero trust concepts and encompasses component relationships, workflow planning, and access policies" (Rose et al., 2020). The publication identifies seven tenets of Zero Trust:
+[3.2 Design Principles](#32-design-principles)
 
-1. All data sources and computing services are considered resources
-2. All communication is secured regardless of network location
-3. Access to individual enterprise resources is granted on a per-session basis
-4. Access to resources is determined by dynamic policy
-5. The enterprise monitors and measures the integrity and security posture of all owned and associated assets
-6. All resource authentication and authorisation are dynamic and strictly enforced before access is allowed
-7. The enterprise collects as much information as possible about the current state of assets, network infrastructure, and communications and uses it to improve its security posture
+[3.3 Implementation Strategy](#33-implementation-strategy)
 
-The Department of Defense (DoD) Zero Trust Reference Architecture (DISA, 2021) extends these principles to seven pillars: User, Device, Network/Environment, Application/Workload, Data, Visibility/Analytics, and Automation/Orchestration. This framework provides a more granular decomposition useful for mapping implementation controls.
+[3.4 Evaluation Criteria](#34-evaluation-criteria)
 
-In the context of Kubernetes and cloud-native systems, Jeyaraj (2023) argues that Zero Trust must be re-interpreted for container orchestration environments where the perimeter is the workload itself. Each pod becomes its own trust boundary, requiring identity verification, network policy enforcement, and runtime behavioural monitoring.
+[3.5 Ethical Considerations](#35-ethical-considerations)
 
-### 2.2 DevSecOps Principles and Practices
+[**4. Design and Implementation**](#4-design-and-implementation)
 
-DevSecOps represents the integration of security practices into every phase of the DevOps software delivery lifecycle (Myrbakken & Colomo-Palacios, 2017). Rather than treating security as a final gate before production deployment, DevSecOps "shifts security left" — embedding automated security checks as early as the code commit stage.
+[4.1 System Architecture Overview](#41-system-architecture-overview)
 
-The OWASP DevSecOps Guidelines (OWASP, 2023) define four categories of security integration points:
+[4.2 Infrastructure Layer](#42-infrastructure-layer)
 
-1. **Pre-commit**: Secret scanning, linting, local SAST
-2. **Build/CI**: Dependency scanning, container image scanning, IaC analysis, SBOM generation
-3. **Deploy/CD**: Admission control, policy enforcement, configuration validation
-4. **Runtime**: Intrusion detection, behavioural monitoring, anomaly detection
+[4.3 Platform Layer - Kubernetes and GitOps](#43-platform-layer---kubernetes-and-gitops)
 
-Souppaya et al. (2023) in NIST SP 800-204C emphasise that DevSecOps for microservices requires security controls at the service mesh layer, including mutual TLS, request authentication, and authorization policy enforcement. However, their framework focuses primarily on Istio service mesh implementations and does not address the broader CI/CD pipeline integration.
+[4.4 Application Layer - Microservices Design](#44-application-layer---microservices-design)
 
-The "left-shift" principle does not mean abandoning runtime security. Rather, as argued by Shamim et al. (2020), a mature DevSecOps implementation requires security controls at **every** stage, with earlier stages catching issues before they reach production, and later stages detecting threats that evade static analysis.
+[4.5 CI/CD Pipeline Architecture](#45-cicd-pipeline-architecture)
 
-### 2.3 Continuous Compliance in Cloud-Native Systems
+[4.6 Policy-as-Code Implementation](#46-policy-as-code-implementation)
 
-Compliance has traditionally been assessed through periodic audits — a model fundamentally incompatible with continuous deployment practices. Fitzgerald and Stol (2017) introduced the concept of "Continuous Compliance" as a necessary evolution, arguing that compliance controls must be embedded into the software delivery pipeline and enforced automatically.
+[4.7 Secret Lifecycle Management](#47-secret-lifecycle-management)
 
-The concept of Compliance-as-Code (CaC) extends Infrastructure-as-Code principles to compliance requirements. Policies are expressed as machine-readable rules, version-controlled alongside application code, and automatically enforced during deployment (Sanchez-Gordon & Colomo-Palacios, 2020).
+[4.8 Runtime Security - Falco and eBPF](#48-runtime-security---falco-and-ebpf)
 
-The Cloud Security Alliance (CSA) DevSecOps Working Group (2022) identified three maturity levels for compliance automation:
+[4.9 Observability Stack](#49-observability-stack)
 
-- **Level 1 — Reactive**: Manual compliance checks triggered by audits
-- **Level 2 — Proactive**: Automated scanning in CI/CD with manual remediation
-- **Level 3 — Continuous**: Automated enforcement, remediation, and continuous monitoring with real-time compliance dashboards
+[4.10 AI-Augmented Security Monitoring](#410-ai-augmented-security-monitoring)
 
-This thesis targets Level 3 maturity by implementing automated enforcement at every stage coupled with real-time monitoring and alerting.
+[4.11 Implementation Artefacts Summary](#411-implementation-artefacts-summary)
 
-### 2.4 Kubernetes Security Landscape
+[**5. Evaluation**](#5-evaluation)
 
-Kubernetes introduces a unique security surface area characterised by its declarative configuration model, role-based access control (RBAC), network policy primitives, and pod security standards. The Center for Internet Security (CIS) Kubernetes Benchmark v1.8 defines over 200 security configuration recommendations across the control plane, worker nodes, policies, and managed services (CIS, 2024).
+[5.1 Evaluation Setup and Methodology](#51-evaluation-setup-and-methodology)
 
-Key Kubernetes security mechanisms relevant to this work include:
+[5.2 NIST SP 800-207 Zero Trust Compliance Mapping](#52-nist-sp-800-207-zero-trust-compliance-mapping)
 
-**Pod Security Standards (PSS)**: Kubernetes defines three security profiles — Privileged, Baseline, and Restricted — that govern container security contexts, capabilities, and privilege escalation. The Restricted profile enforces non-root execution, capability dropping, read-only root filesystems, and seccomp profile application (Kubernetes, 2024).
+[5.3 Pipeline Security Gate Effectiveness](#53-pipeline-security-gate-effectiveness)
 
-**Network Policies**: Kubernetes NetworkPolicy resources enable microsegmentation by defining ingress and egress rules at the pod level. However, network policies require a CNI plugin that supports them (e.g., Calico, Cilium) and are not enforced by default (Kubernetes, 2024).
+[5.4 Policy Enforcement Coverage Analysis](#54-policy-enforcement-coverage-analysis)
 
-**Admission Controllers**: Kubernetes admission controllers intercept API requests before persistence, enabling policy enforcement. Dynamic admission controllers, such as webhook-based validators and mutators, allow external policy engines like Kyverno and OPA Gatekeeper to evaluate and enforce custom policies (Kubernetes, 2024).
+[5.5 Runtime Detection Capability Assessment](#55-runtime-detection-capability-assessment)
 
-### 2.5 Policy-as-Code and Admission Control
+[5.6 MITRE ATT&CK Coverage Analysis](#56-mitre-attck-coverage-analysis)
 
-Policy-as-Code (PaC) represents a paradigm where security and compliance policies are expressed as executable code, version-controlled, tested, and automatically enforced. Two dominant frameworks have emerged in the Kubernetes ecosystem:
+[5.7 Supply Chain Security Assessment](#57-supply-chain-security-assessment)
 
-**Open Policy Agent (OPA)**: OPA is a general-purpose policy engine that uses the Rego declarative language. OPA Gatekeeper integrates OPA as a Kubernetes admission controller, while Conftest enables OPA policy evaluation in CI/CD pipelines against structured data formats including Kubernetes manifests, Terraform plans, and Dockerfiles (OPA, 2024).
+[5.8 Compliance Metrics Summary](#58-compliance-metrics-summary)
 
-**Kyverno**: Kyverno is a Kubernetes-native policy engine that uses YAML-based policy definitions, eliminating the need for a separate policy language. Kyverno policies can validate, mutate, generate, and clean up Kubernetes resources. Its admission webhook mode enforces policies at deploy-time, while its CLI enables CI/CD pipeline integration (Kyverno, 2024).
+[5.9 Discussion of Results](#59-discussion-of-results)
 
-The comparative advantage of using both engines, as demonstrated in this thesis, is that OPA/Conftest provides broader policy coverage across multiple IaC formats in CI/CD, while Kyverno offers simpler Kubernetes-native admission control with YAML-based policies that are more accessible to operations teams.
+[**6. Discussion**](#6-discussion)
 
-### 2.6 Software Supply Chain Security
+[6.1 Critical Analysis](#61-critical-analysis)
 
-Software supply chain attacks — such as the SolarWinds (2020) and Log4Shell (2021) incidents — have elevated supply chain security to a top-tier concern. The 2023 Sonatype State of the Software Supply Chain Report documented a 742% increase in supply chain attacks between 2019 and 2023 (Sonatype, 2023).
+[6.2 Research Question Answers](#62-research-question-answers)
 
-Key frameworks and tools addressing supply chain security include:
+[6.3 Comparison with Existing Approaches](#63-comparison-with-existing-approaches)
 
-**SBOM (Software Bill of Materials)**: Executive Order 14028 (Biden, 2021) mandated SBOM generation for software sold to the US government. SBOM formats include SPDX (ISO/IEC 5962:2021) and CycloneDX (OWASP). Tools like Syft generate SBOMs from container images, enabling downstream vulnerability management.
+[6.4 Limitations and Threats to Validity](#64-limitations-and-threats-to-validity)
 
-**Container Image Scanning**: Tools such as Trivy, Grype, and Snyk scan container images against vulnerability databases (CVE, NVD). Trivy, used in this implementation, scans for OS and library vulnerabilities, misconfigurations, and embedded secrets (Aqua Security, 2024).
+[6.5 Implications for Practice](#65-implications-for-practice)
 
-**IaC Security Scanning**: Checkov (Bridgecrew/Palo Alto Networks) evaluates Terraform, Kubernetes manifests, and Dockerfiles against security best practice libraries containing over 1,000 pre-built policies (Bridgecrew, 2024).
+[**7. Conclusion and Future Work**](#7-conclusion-and-future-work)
 
-### 2.7 Runtime Security and eBPF
+[7.1 Conclusion](#71-conclusion)
 
-Static analysis (SAST) and composition analysis (SCA) in CI/CD pipelines cannot detect runtime threats such as container escapes, privilege escalation, or data exfiltration. Runtime security monitoring fills this gap by observing system behaviour during execution.
+[7.2 Future Work](#72-future-work)
 
-**Falco** (CNCF graduated project) uses eBPF (extended Berkeley Packet Filter) probes or kernel modules to intercept system calls at the kernel level, enabling zero-overhead security event detection. Falco evaluates system call data against configurable rules to detect suspicious behaviour (Falco, 2024).
+[**8. Contribution and Novelty**](#8-contribution-and-novelty)
 
-eBPF represents a significant advancement over traditional security monitoring approaches. As Rice (2022) explains, eBPF programs run in a sandboxed virtual machine within the Linux kernel, enabling observation of all system calls, network packets, and file operations without modifying application code or requiring privileged containers. This makes eBPF-based security monitoring both comprehensive and non-intrusive.
+[**9. References**](#9-references)
 
-The MITRE ATT&CK framework for Containers (MITRE, 2024) provides a taxonomy of adversary tactics, techniques, and procedures (TTPs) specific to containerised environments. Mapping Falco rules to MITRE ATT&CK techniques provides a structured coverage assessment methodology.
+[**10. Appendices**](#10-appendices)
 
-### 2.8 AI-Augmented Security Operations
+[Appendix A: Security Tool Configuration Matrix](#appendix-a-security-tool-configuration-matrix)
 
-The volume and velocity of security events in cloud-native environments create an alert fatigue problem. Alahmadi et al. (2020) found that security analysts spend an average of 25 minutes per alert investigation, with over 50% of alerts being false positives.
+[Appendix B: Kyverno and OPA Policy Specifications](#appendix-b-kyverno-and-opa-policy-specifications)
 
-Large Language Models (LLMs) have emerged as a potential solution for security event enrichment. Recent work by Microsoft (Security Copilot), Google (Gemini for Security), and CrowdStrike (Charlotte AI) demonstrates the application of LLMs for:
+[Appendix C: Falco Custom Rules with MITRE ATT&CK Mapping](#appendix-c-falco-custom-rules-with-mitre-attck-mapping)
 
-- Automated incident narrative generation
-- Threat intelligence correlation
-- Investigation step recommendation
-- Root cause analysis assistance
+[Appendix D: CI/CD Pipeline Specifications](#appendix-d-cicd-pipeline-specifications)
 
-However, these are proprietary, closed-source solutions. The application of LLMs in open-source, self-hosted security monitoring pipelines — as implemented in this thesis through Azure OpenAI GPT-4o-mini integration with Falco — remains an underexplored area.
+[Appendix E: Grafana Alert Rule Summary](#appendix-e-grafana-alert-rule-summary)
 
-### 2.9 Research Gap Analysis
+[Appendix F: Repository Structure and Evidence](#appendix-f-repository-structure-and-evidence)
 
-The literature review reveals several gaps that this thesis addresses:
 
-| Gap | Description | This Thesis |
-|-----|-------------|-------------|
-| **G1** | No complete reference implementation integrating Zero Trust across all 6 layers (infra → runtime) for Kubernetes | Full implementation provided |
-| **G2** | Policy-as-code studies focus on either CI/CD or admission control, rarely both | Both OPA (CI/CD) and Kyverno (CI/CD) with Falco (runtime) |
-| **G3** | SBOM generation mentioned in guidelines but rarely demonstrated end-to-end | Dual-format SBOM (SPDX + CycloneDX) in CI/CD |
-| **G4** | Secret rotation is described as a best practice but automated implementations are scarce | Fully automated monthly rotation via GitHub Actions + SealedSecrets |
-| **G5** | AI-augmented security monitoring for Kubernetes runtime events is undocumented in open literature | Azure OpenAI GPT-4o-mini enrichment of Falco events |
-| **G6** | NIST 800-207 compliance mapping to concrete Kubernetes implementations is abstract | Detailed tenet-by-tenet mapping with evidence |
+# **List of Figures**
 
----
+* **Figure 1:** Six-layer Zero-Trust DevSecOps architecture overview  
+* **Figure 2:** Infrastructure topology on Oracle Cloud Infrastructure  
+* **Figure 3:** Kubernetes cluster namespace and component layout  
+* **Figure 4:** FreshBonds microservices application architecture  
+* **Figure 5:** CI/CD pipeline architecture with security gates  
+* **Figure 6:** GitOps deployment flow via Argo CD  
+* **Figure 7:** Policy-as-code enforcement points across the lifecycle  
+* **Figure 8:** Secret lifecycle management and rotation workflow  
+* **Figure 9:** Runtime security event flow from Falco to AI enrichment  
+* **Figure 10:** Observability stack data flow  
+* **Figure 11:** NIST SP 800-207 compliance mapping visualisation  
+* **Figure 12:** MITRE ATT\&CK for Containers coverage heat map
 
-## Chapter 3: Methodology
+# **List of Tables**
 
-### 3.1 Research Approach
+* **Table 1:** Project scope \- included and excluded areas  
+* **Table 2:** Taxonomy of related work by research domain  
+* **Table 3:** Comparative summary of related work  
+* **Table 4:** DSRM activities mapped to project phases  
+* **Table 5:** Design principles for the Zero-Trust DevSecOps framework  
+* **Table 6:** Oracle Cloud Infrastructure compute instance specifications  
+* **Table 7:** Kubernetes namespace allocation and purpose  
+* **Table 8:** Microservice technology stack and security features  
+* **Table 9:** CI/CD pipeline summary and security tool integration  
+* **Table 10:** Implementation artefact summary with repository evidence  
+* **Table 11:** NIST SP 800-207 Zero Trust tenet compliance mapping  
+* **Table 12:** Pipeline security gate effectiveness  
+* **Table 13:** Policy enforcement coverage by security domain  
+* **Table 14:** Runtime detection capability assessment  
+* **Table 15:** MITRE ATT\&CK for Containers coverage analysis  
+* **Table 16:** Supply chain security control assessment  
+* **Table 17:** Compliance metrics summary  
+* **Table 18:** Policy and monitoring control summary  
+* **Table 19:** Comparison with existing approaches  
+* **Table 20:** Future work areas and planned improvements  
+* **Table 21:** Project contributions summary
 
-This research adopts a **Design Science Research (DSR)** approach, as defined by Hevner et al. (2004) and refined by Peffers et al. (2007). DSR is appropriate for this study because the primary objective is to create a novel IT artefact — a Zero-Trust DevSecOps framework — and evaluate its effectiveness in addressing a practical problem.
+# **List of Abbreviations**
 
-The DSR paradigm distinguishes itself from behavioural science by producing prescriptive knowledge ("how to build") rather than descriptive knowledge ("how it works"). The artefact produced in this research is a **system artefact**: a functional, production-deployed platform that instantiates the proposed framework.
+| Abbreviation | Full Term |
+| :---- | :---- |
+| AI | Artificial Intelligence |
+| API | Application Programming Interface |
+| C2 | Command and Control |
+| CI/CD | Continuous Integration and Continuous Delivery |
+| CNCF | Cloud Native Computing Foundation |
+| CSP | Content Security Policy |
+| CVE | Common Vulnerabilities and Exposures |
+| DAST | Dynamic Application Security Testing |
+| DSRM | Design Science Research Methodology |
+| eBPF | Extended Berkeley Packet Filter |
+| HSTS | HTTP Strict Transport Security |
+| IaC | Infrastructure as Code |
+| JWT | JSON Web Token |
+| LLM | Large Language Model |
+| MIS | Master of Information Security |
+| MTTU | Mean Time to Understand |
+| NIST | National Institute of Standards and Technology |
+| OCI | Oracle Cloud Infrastructure |
+| OPA | Open Policy Agent |
+| OWASP | Open Worldwide Application Security Project |
+| RBAC | Role-Based Access Control |
+| SAST | Static Application Security Testing |
+| SBOM | Software Bill of Materials |
+| SCA | Software Composition Analysis |
+| SOC | Security Operations Centre |
+| TLS | Transport Layer Security |
+| VCN | Virtual Cloud Network |
+| ZTA | Zero Trust Architecture |
 
-### 3.2 Design Science Research Framework
+# **1\. Introduction**
 
-Following the Peffers et al. (2007) design science research methodology (DSRM), the research proceeds through six activities:
+## **1.1 General Introduction to the Problem**
 
-**Activity 1 — Problem Identification and Motivation:**
-Cloud-native organisations face fragmented security tooling, manual compliance verification, and disconnected security layers across their DevSecOps pipeline. This was established through literature review and industry reports indicating that 67% of organisations experienced a container security incident in the past 12 months (Red Hat, 2024).
+The adoption of cloud-native technologies has accelerated dramatically across the software industry. According to the Cloud Native Computing Foundation (CNCF) Annual Survey 2024, over ninety-six per cent of organisations are now using or evaluating Kubernetes, with container adoption in production environments increasing year-over-year (CNCF, 2024). Kubernetes has emerged as the de facto standard for container orchestration, enabling organisations to deploy, scale, and manage microservices architectures with unprecedented speed and flexibility (Burns *et al.*, 2016). This velocity, however, introduces a fundamental security paradox: the same ephemeral, distributed, and automated characteristics that make cloud-native systems attractive also render traditional security models inadequate.
 
-**Activity 2 — Define Objectives of a Solution:**
-The framework must: (a) implement NIST SP 800-207 Zero Trust principles across all layers, (b) automate compliance enforcement in CI/CD pipelines without disrupting development velocity, (c) provide runtime threat detection mapped to MITRE ATT&CK, (d) manage secrets with automated rotation, and (e) enrich security events with AI-generated context.
+Traditional perimeter-based security operates on the assumption that entities inside the network boundary can be implicitly trusted. Firewalls, network segmentation, and VPN tunnels form a defensive perimeter around organisational assets, with the implicit assumption that traffic originating from within is benign (Kindervag, 2010). In a Kubernetes environment, however, this assumption breaks down for several reasons. First, containers are ephemeral \- pods are created, destroyed, and rescheduled across nodes in response to scaling events, failures, and deployments. A container's IP address, hostname, and network neighbourhood change constantly. Second, microservices communicate over internal cluster networks where east-west traffic between services is often unmonitored and unencrypted. Third, the software supply chain introduces transitive dependencies from public registries, open-source libraries, and base images that may contain vulnerabilities or malicious code (Sonatype, 2023). Fourth, the DevOps velocity model \- characterised by frequent commits, automated builds, and continuous deployment \- compresses the window in which security controls can be applied, reviewed, and verified.
 
-**Activity 3 — Design and Development:**
-A six-layer architecture was designed, integrating 10 security tools across 6 CI/CD pipelines, with policy-as-code enforcement at build, deploy, and runtime stages. The architecture decisions follow the C4 model (Brown, 2018) with explicit security boundary annotations.
+The Red Hat State of Kubernetes Security Report 2024 found that sixty-seven per cent of organisations had delayed or slowed down deployment due to security concerns, and forty-six per cent had experienced a security incident in their container or Kubernetes environment in the preceding twelve months (Red Hat, 2024). These incidents ranged from misconfigured workloads and exposed secrets to runtime compromises and supply chain attacks. The report highlighted a consistent theme: security tooling exists, but it is fragmented across different stages of the delivery lifecycle, operated by different teams, and often lacks the automation necessary to keep pace with deployment frequency.
 
-**Activity 4 — Demonstration:**
-The framework was implemented as a production deployment on Oracle Cloud Infrastructure, running a real microservices application (FreshBonds) with four services, automated CI/CD, and complete monitoring.
+This fragmentation creates compliance gaps. A vulnerability scanner may identify a CRITICAL CVE in a container image during the build phase, but if there is no automated gate to block the deployment, the vulnerable image reaches production. A policy engine may define that all containers must run as non-root, but if this policy is only enforced during manual review rather than through automated admission control, non-compliant configurations can be deployed when reviewers are unavailable or overwhelmed. A runtime monitoring tool may detect a container compromise through kernel-level instrumentation, but if the alert is not correlated with the deployment that introduced the vulnerability, the incident response team lacks the context needed for rapid remediation.
 
-**Activity 5 — Evaluation:**
-The artefact is evaluated against: (a) NIST SP 800-207 tenet compliance, (b) MITRE ATT&CK coverage, (c) pipeline security gate effectiveness, (d) policy enforcement coverage metrics, and (e) AI enrichment operational value.
+Zero Trust Architecture (ZTA), as defined by the National Institute of Standards and Technology in Special Publication 800-207, provides a conceptual framework for addressing these challenges (Rose *et al.*, 2020). ZTA replaces the perimeter-based trust model with a principle of "never trust, always verify" \- every request, every identity, and every resource access must be authenticated, authorised, and continuously validated regardless of network location. The seven core tenets of NIST SP 800-207 encompass resource identification, communication security, per-session access, dynamic policy, continuous monitoring, strict enforcement, and continuous posture improvement. While these tenets provide a comprehensive security philosophy, translating them into concrete, automated controls within a Kubernetes DevOps workflow remains a significant engineering and research challenge.
 
-**Activity 6 — Communication:**
-This thesis document, accompanied by the open-source repository.
+DevSecOps, the practice of integrating security as a first-class concern throughout the software development lifecycle, offers a complementary operational model (Myrbakken and Colomo-Palacios, 2017). By shifting security left \- embedding security checks into the development and CI/CD pipeline rather than bolting them on after deployment \- DevSecOps reduces the feedback loop between code change and security validation. However, left-shift security alone is insufficient. Security must also be enforced at deployment time through admission control policies, at runtime through kernel-level monitoring, and post-deployment through continuous vulnerability scanning and secret rotation. A comprehensive approach requires security controls at every stage: code → build → deploy → run → monitor.
 
-### 3.3 System Design Methodology
+## **1.2 Problem Statement**
 
-The system design follows a **Defence-in-Depth** approach, implementing security controls at each layer independently so that compromise of one layer does not compromise the entire system. The design principles are:
+Organisations deploying microservices on Kubernetes face a fragmented security landscape where compliance checks are distributed across separate tools, pipelines, and teams. Vulnerability scanners, policy engines, runtime monitors, and secret managers operate independently, creating gaps between security controls that adversaries can exploit. There is no unified framework that integrates these tools into a continuous compliance pipeline aligned with Zero Trust principles, where every stage of the software delivery lifecycle \- from code commit to runtime operation \- is subject to automated verification and enforcement.
 
-1. **Assume Breach**: Every component is designed as if adjacent components are already compromised.
-2. **Least Privilege**: Each component receives the minimum permissions necessary for its function.
-3. **Defence in Depth**: Multiple independent security controls at each layer.
-4. **Security as Code**: All security policies are version-controlled and automatically enforced.
-5. **Continuous Verification**: Security posture is continuously monitored and validated.
-6. **Declarative Intent**: The desired security state is declared; the system converges to that state automatically.
+## **1.3 Project Aims and Objectives**
 
-### 3.4 Implementation Strategy
+The primary aim of this project is to design, implement, and evaluate a Zero-Trust DevSecOps framework that automates continuous compliance across the complete software delivery lifecycle for a Kubernetes microservices application.
 
-The implementation follows a **bottom-up approach**, building from infrastructure through to application and monitoring layers:
+The specific objectives are:
 
-1. **Phase 1 — Infrastructure**: Terraform IaC provisioning of OCI compute, networking, and security lists
-2. **Phase 2 — Platform**: Kubernetes cluster bootstrapping with ArgoCD GitOps
-3. **Phase 3 — Security Tooling**: Deployment of Falco, SealedSecrets, Kyverno policies, OPA policies
-4. **Phase 4 — Application**: Microservices development with embedded security controls
-5. **Phase 5 — CI/CD**: Six-pipeline GitHub Actions architecture with security gates
-6. **Phase 6 — Monitoring**: Prometheus, Grafana, Loki, PagerDuty integration
-7. **Phase 7 — AI Enrichment**: Azure OpenAI integration for Falco event analysis
+1. **Design a six-layer security architecture** that maps Zero Trust principles to concrete implementation controls across infrastructure, platform, application, CI/CD, runtime, and observability layers.  
+2. **Implement infrastructure as code** using Terraform to provision a three-node Kubernetes cluster on Oracle Cloud Infrastructure with documented security hardening and network segmentation.  
+3. **Develop a microservices application** (FreshBonds) with built-in security features including JWT authentication, bcrypt password hashing, rate limiting, input validation, and role-based access control.  
+4. **Build a multi-pipeline CI/CD architecture** using GitHub Actions that integrates ten security tools across six specialised workflows with automated blocking gates for security violations.  
+5. **Implement a dual-engine policy-as-code framework** using Kyverno and Open Policy Agent (OPA) to enforce pod security, image verification, resource management, and network controls.  
+6. **Deploy runtime security monitoring** using Falco with custom eBPF-based rules mapped to the MITRE ATT\&CK framework, integrated with an AI-augmented incident enrichment system using Azure OpenAI GPT-4o-mini.  
+7. **Establish automated secret lifecycle management** with monthly rotation of database credentials, JWT signing keys, and API tokens using Bitnami Sealed Secrets and Git-based audit trails.  
+8. **Evaluate the framework** against NIST SP 800-207 Zero Trust Architecture tenets, measuring policy coverage, pipeline gate effectiveness, runtime detection capability, and MITRE ATT\&CK technique coverage.
 
-### 3.5 Evaluation Criteria
+## **1.4 Scope of the Project**
+
+Table 1 defines the boundaries of what is included and excluded from the project scope.
+
+*Table 1: Project scope \- included and excluded areas*
+
+| Area | Included in Scope | Excluded from Scope |
+| :---- | :---- | :---- |
+| Application | FreshBonds microservices with frontend, API gateway, user service, and product service | Full commercial e-commerce features |
+| Infrastructure | Terraform definitions for OCI networking and compute resources | Multi-cloud provisioning |
+| Kubernetes | Helm chart, Argo CD application manifests, namespaces, ingress, secrets, monitoring stack | Multi-cluster federation |
+| CI/CD | Six GitHub Actions workflows for PR validation, application CI/CD, Terraform, security scanning, secret rotation, and AI collector CI/CD | Enterprise change-advisory workflows |
+| Policy | Kyverno and OPA policy checks for pod security, image policy, resource limits, and network-policy-related checks | Full organisation-wide policy library |
+| Runtime Monitoring | Falco custom rules, Falcosidekick routing, Prometheus alert rules, PagerDuty integration | Formal SOC workflow integration |
+| AI Component | Azure OpenAI-based incident report generation for selected Falco events | Training custom anomaly detection models |
+| Evaluation | Repository evidence, control mapping, rule counts, workflow inspection, and design evaluation | Formal penetration testing and load benchmarking |
+
+## **1.5 Research Questions**
+
+This project addresses the following research questions:
+
+* **RQ1:** How can Zero Trust Architecture principles be operationalised as automated controls across the six layers of a Kubernetes DevSecOps delivery pipeline?  
+* **RQ2:** What pipeline architecture balances comprehensive security verification with acceptable developer velocity and deployment frequency?  
+* **RQ3:** How can policy-as-code enforcement be combined with runtime threat detection to achieve defence-in-depth for containerised workloads?  
+* **RQ4:** To what extent can AI enrichment of runtime security events reduce Mean Time to Understand (MTTU) for security incidents?
+
+## **1.6 Report Structure**
+
+The remainder of this report is organised as follows. Chapter 2 presents a structured literature review covering Zero Trust Architecture, DevSecOps, Kubernetes security, policy-as-code, supply chain security, runtime monitoring, and AI-assisted security operations, culminating in the identification of the research gap that motivates this project. Chapter 3 describes the systematic approach using the Design Science Research Methodology (DSRM), the design principles guiding the implementation, and the evaluation criteria. Chapter 4 presents the design and implementation of the framework in detail, covering each of the six architectural layers with supporting diagrams and repository evidence. Chapter 5 evaluates the framework against NIST SP 800-207, MITRE ATT\&CK, and other compliance frameworks. Chapter 6 provides a critical discussion of the findings, answers the research questions, and acknowledges limitations. Chapter 7 concludes the report and identifies directions for future work. Chapter 8 summarises the contributions and novelty of the project.
+
+# **2\. Related Work**
+
+## **2.1 Literature Review Organisation**
+
+The literature review is organised using a taxonomic structure across six research domains that collectively define the problem space and solution landscape for Zero-Trust DevSecOps. Table 2 presents the taxonomy used to structure this review.
+
+*Table 2: Taxonomy of related work by research domain*
+
+| Domain | Key Concepts | Representative Sources |
+| :---- | :---- | :---- |
+| Zero Trust Architecture | Never trust always verify, NIST SP 800-207, identity-centric security | Rose et al. (2020), Kindervag (2010), DISA (2021), Jeyaraj (2023) |
+| DevSecOps | Shift-left security, continuous security, security as code | Myrbakken and Colomo-Palacios (2017), OWASP (2023), Fitzgerald and Stol (2017) |
+| Kubernetes Security | Pod security, admission control, CIS benchmarks | Shamim et al. (2020), CIS (2024), Kubernetes (2024) |
+| Supply Chain Security | SBOM, vulnerability scanning, image signing | Sonatype (2023), Biden (2021), Souppaya et al. (2023) |
+| Runtime Security | eBPF, system call monitoring, threat detection | Rice (2022), Falco (2024), MITRE (2024) |
+| AI-Assisted Security | LLM-augmented SOC, alert enrichment, automated triage | Alahmadi et al. (2020), Microsoft (2024) |
+
+## **2.2 Zero Trust Architecture**
+
+The concept of Zero Trust was first articulated by Kindervag (2010) in a Forrester Research report that challenged the conventional wisdom of perimeter-based network security. Kindervag argued that trust is a vulnerability \- any model that implicitly trusts entities based on their network location creates exploitable assumptions. The original formulation focused on network micro-segmentation and packet inspection, but the concept has since expanded to encompass identity, device, data, application, and infrastructure dimensions.
+
+The formalisation of Zero Trust as a reference architecture came with NIST Special Publication 800-207 (Rose *et al.*, 2020), which defines seven tenets that constitute a Zero Trust Architecture. These tenets establish that all data sources and computing services are resources, all communication must be secured regardless of network location, access is granted on a per-session basis, access is determined by dynamic policy, the enterprise monitors all assets, authentication and authorisation are strictly enforced, and the enterprise collects information to improve security posture. NIST SP 800-207 has become the primary reference standard for Zero Trust implementations across government and industry.
+
+The Department of Defense Zero Trust Reference Architecture (DISA, 2021\) extends the NIST model with seven pillars: User, Device, Network/Environment, Application/Workload, Data, Visibility/Analytics, and Automation/Orchestration. This pillar model provides a more granular framework for mapping controls to specific security domains and is particularly relevant to complex, multi-component systems such as Kubernetes-based microservices.
+
+Jeyaraj (2023) specifically addresses Zero Trust implementation challenges in cloud-native environments, identifying the difficulty of applying Zero Trust principles to dynamic, container-based workloads where traditional identity and network boundaries are fluid. Jeyaraj's work highlights the need for automated policy enforcement and continuous monitoring as key enablers for Zero Trust in Kubernetes.
+
+## **2.3 DevSecOps and Continuous Security**
+
+DevSecOps emerged as an evolution of the DevOps movement, recognising that security must be integrated throughout the software delivery lifecycle rather than applied as a terminal gate (Myrbakken and Colomo-Palacios, 2017). The multivocal literature review by Myrbakken and Colomo-Palacios identified key themes including cultural transformation, automation of security testing, and the challenge of balancing security rigour with development velocity.
+
+Fitzgerald and Stol (2017) provide a roadmap for continuous software engineering that positions continuous security as an integral component of the continuous delivery pipeline, alongside continuous integration, continuous testing, and continuous deployment. Their framework emphasises that security must be automated at the same cadence as other quality attributes to avoid becoming a bottleneck.
+
+The OWASP DevSecOps Guideline (OWASP, 2023\) provides practical recommendations for integrating security tools into CI/CD pipelines, categorising tools by their position in the pipeline: Static Application Security Testing (SAST) during code analysis, Software Composition Analysis (SCA) during dependency resolution, container scanning during image builds, and Dynamic Application Security Testing (DAST) during integration testing. The guideline emphasises the principle of "security as code" \- expressing security policies, configurations, and tests as version-controlled artefacts that are subject to the same review and deployment processes as application code.
+
+The Cloud Security Alliance (2022) DevSecOps Working Group publication identifies seven key practices for effective DevSecOps: threat modelling, security requirements, secure coding, security testing, vulnerability management, incident response, and compliance monitoring. Their work emphasises that effective DevSecOps requires not only technical tooling but also organisational alignment between development, security, and operations teams.
+
+NIST Special Publication 800-204C (Souppaya *et al.*, 2023\) provides specific guidance for integrating software supply chain security into DevSecOps CI/CD pipelines, with particular attention to microservices architectures and service mesh deployments. This publication is directly relevant to the pipeline architecture implemented in this project.
+
+## **2.4 Kubernetes Security and Policy Enforcement**
+
+Kubernetes security encompasses multiple domains: cluster infrastructure security, workload security, network security, and supply chain security. The CIS Kubernetes Benchmark v1.8 (CIS, 2024\) provides a comprehensive set of configuration recommendations organised into control plane components, etcd, control plane configuration, worker nodes, policies, and managed services. These benchmarks establish baseline security expectations that can be validated through automated scanning tools such as Checkov and kube-bench.
+
+Shamim *et al.* (2020) present a systematisation of knowledge related to Kubernetes security practices, identifying eleven critical security considerations: authentication, authorisation, admission control, network policies, secrets management, container image security, logging and monitoring, runtime security, compliance, supply chain, and incident response. Their work provides a structured taxonomy that maps well to the six-layer architecture adopted in this project.
+
+Policy-as-code for Kubernetes has emerged through two primary frameworks. Open Policy Agent (OPA) with Gatekeeper provides a general-purpose policy engine using the Rego language, capable of expressing complex admission control rules (OPA, 2024). Kyverno offers a Kubernetes-native alternative that expresses policies in YAML, leveraging Kubernetes API conventions familiar to cluster operators (Kyverno, 2024). Both frameworks support validation (blocking non-compliant resources), mutation (modifying resources to add defaults), and generation (creating derived resources). The choice between OPA and Kyverno involves trade-offs between expressiveness, learning curve, and ecosystem integration, motivating the dual-engine approach adopted in this project.
+
+Kubernetes Pod Security Standards (Kubernetes, 2024\) define three security profiles \- Privileged, Baseline, and Restricted \- that provide progressively stricter security configurations for pod workloads. The Restricted profile, which requires non-root execution, capability dropping, and read-only root filesystems, aligns closely with Zero Trust principles of least privilege and is the target profile for the implementation in this project.
+
+## **2.5 Supply Chain Security**
+
+Software supply chain security gained significant attention following Executive Order 14028 (Biden, 2021), which mandated Software Bill of Materials (SBOM) generation for all software sold to the US federal government. The executive order formalised the requirement for organisations to understand and document the components, libraries, and dependencies within their software systems.
+
+Sonatype's 9th Annual State of the Software Supply Chain Report (Sonatype, 2023\) found that software supply chain attacks increased by 200 per cent year-over-year, with attackers increasingly targeting open-source repositories, CI/CD pipelines, and build systems. The report identified several attack vectors relevant to Kubernetes deployments: typosquatting in package registries, compromised base images in container registries, and dependency confusion attacks targeting private package resolution.
+
+NIST Special Publication 800-204C (Souppaya *et al.*, 2023\) provides specific strategies for integrating supply chain security into DevSecOps pipelines, including SBOM generation, vulnerability scanning, image signing, and provenance verification. The publication recommends dual-format SBOM generation (SPDX and CycloneDX) to ensure interoperability across different compliance and analysis tools, a recommendation adopted in this project.
+
+Container vulnerability scanning tools such as Trivy (Aqua Security, 2024\) and infrastructure-as-code scanning tools such as Checkov (Bridgecrew, 2024\) provide automated mechanisms for identifying known vulnerabilities in container images, application dependencies, and infrastructure configurations. These tools produce machine-readable output (SARIF, JSON) that can be integrated into CI/CD pipelines as automated gates, blocking deployments that fail security thresholds.
+
+## **2.6 Runtime Security Monitoring**
+
+Runtime security monitoring addresses the detection of threats that manifest after deployment \- malicious activities that cannot be prevented by static analysis or admission control alone. The Falco project (Falco, 2024), a CNCF graduated project, provides kernel-level monitoring through eBPF (Extended Berkeley Packet Filter) probes that intercept system calls without modifying application code or requiring kernel modules.
+
+Rice (2022) provides a comprehensive treatment of eBPF programming for security applications, demonstrating how eBPF can observe system calls, network connections, and file operations with minimal performance overhead. The key advantage of eBPF-based monitoring is that it operates at the kernel level, below the application and container runtime layers, making it resistant to evasion by compromised containers. Falco leverages eBPF to implement rule-based detection that can identify suspicious activities such as shell spawning in containers, privilege escalation attempts, sensitive file access, cryptocurrency mining, and reverse shell connections.
+
+The MITRE ATT\&CK framework for Containers (MITRE, 2024\) provides a structured taxonomy of adversary tactics and techniques specific to container environments. The framework covers twelve tactics \- from Initial Access through Execution, Persistence, Privilege Escalation, Defence Evasion, Credential Access, Discovery, Lateral Movement, Collection, Command and Control, Exfiltration, to Impact \- each with associated techniques that describe specific adversary behaviours. Mapping runtime detection rules to MITRE ATT\&CK techniques provides a structured assessment of detection coverage and identifies gaps in security monitoring.
+
+## **2.7 AI-Assisted Security Operations**
+
+Security Operations Centres (SOCs) face a persistent challenge of alert fatigue, where the volume of security alerts exceeds the capacity of human analysts to investigate and respond. Alahmadi *et al.* (2020) found that ninety-nine per cent of security alerts are false positives, and analysts spend significant time on initial triage \- understanding the context, severity, and recommended response for each alert \- rather than on investigation and remediation. This finding motivates the integration of AI-assisted triage capabilities into security monitoring pipelines.
+
+Large Language Models (LLMs) such as GPT-4o-mini (Microsoft, 2024\) offer the potential to reduce Mean Time to Understand (MTTU) by automatically generating contextual threat assessments, investigation steps, and recommended actions for security events. By enriching raw security alerts with natural language analysis, LLMs can help analysts prioritize high-severity incidents and understand the potential impact of detected threats without requiring deep expertise in the specific detection rule that triggered the alert.
+
+However, the application of LLMs to security operations introduces its own challenges, including hallucination (generating plausible but incorrect analysis), latency (API call overhead), cost (per-token pricing), and reliability (dependency on external services). These challenges necessitate careful architectural decisions about where in the alerting pipeline AI enrichment is applied, how its output is validated, and how the system degrades gracefully when the AI service is unavailable.
+
+
+## **2.8 Summary of Related Work**
+
+Table 3 provides a comparative summary of related work across the six research domains, highlighting how each source contributes to the problem space and where the current project addresses identified gaps.
+
+*Table 3: Comparative summary of related work*
+
+| Source | Domain | Contribution | Limitation | Addressed by This Project |
+| :---- | :---- | :---- | :---- | :---- |
+| Rose et al. (2020) | ZTA | NIST SP 800-207 reference architecture with 7 tenets | Conceptual framework; no implementation guidance | Full implementation mapped to all 7 tenets |
+| Kindervag (2010) | ZTA | Original Zero Trust formulation | Network-centric; pre-cloud-native | Extended to cloud-native Kubernetes |
+| DISA (2021) | ZTA | DoD 7-pillar ZT model | Government-specific; complex | Simplified to 6-layer architecture |
+| Myrbakken and Colomo-Palacios (2017) | DevSecOps | Multivocal literature review | No implementation or evaluation | Implemented 6 pipelines with 10 tools |
+| OWASP (2023) | DevSecOps | DevSecOps guideline with tool categories | Guideline only; no integrated framework | Integrated tools across full lifecycle |
+| Shamim et al. (2020) | K8s Security | 11 security considerations taxonomy | Systematisation only; no implementation | Addressed 9 of 11 considerations |
+| Sonatype (2023) | Supply Chain | Attack trends and risk analysis | Industry report; no mitigation framework | Implemented SBOM \+ scanning gates |
+| Souppaya et al. (2023) | Supply Chain | NIST guidance for CI/CD supply chain | Guidance document; reference only | Implemented dual-format SBOM, image scanning |
+| Rice (2022) | Runtime | eBPF programming for security | Technical reference; no integration model | Integrated Falco with AI enrichment |
+| Alahmadi et al. (2020) | AI Security | SOC alert fatigue analysis | Problem identification; no solution | AI enrichment reducing MTTU |
+
+## **2.9 Identification of Research Gap**
+
+The literature review reveals that while individual security components \- vulnerability scanning, policy enforcement, runtime monitoring, and AI-assisted triage \- are well-documented, there is a significant gap in the integration of these components into a unified, automated compliance pipeline aligned with Zero Trust principles. Existing work tends to focus on one or two security domains in isolation:
+
+* NIST SP 800-207 defines the *what* of Zero Trust but not the *how* for Kubernetes implementations.  
+* DevSecOps literature emphasises left-shift security but provides limited guidance on runtime and post-deployment controls.  
+* Kubernetes security publications address pod-level hardening but rarely integrate CI/CD pipeline security, secret management, and runtime monitoring into a cohesive framework.  
+* Supply chain security guidance recommends SBOM generation and scanning but does not address how these integrate with policy enforcement and runtime detection.  
+* AI-assisted security research identifies the potential for LLM-based triage but does not demonstrate integration with container security monitoring systems.
+
+This project addresses this gap by implementing a comprehensive Zero-Trust DevSecOps framework that integrates all six security domains \- infrastructure, platform, application, CI/CD, runtime, and observability \- into a single, version-controlled, automated system with reproducible artefacts and measurable compliance outcomes.
+
+# **3\. Approach**
+
+## **3.1 Systematic Approach**
+
+This project follows the Design Science Research Methodology (DSRM) as defined by Peffers *et al.* (2007) and grounded in the design science paradigm articulated by Hevner *et al.* (2004). DSRM is appropriate for this project because the primary output is a designed artefact \- a Zero-Trust DevSecOps framework \- that is intended to solve an identified organisational problem. Unlike empirical research that observes and explains phenomena, design science research creates and evaluates innovative artefacts that address important problems.
+
+The DSRM framework defines six activities that structure the research process. Table 4 maps these activities to the specific phases of this project.
+
+*Table 4: DSRM activities mapped to project phases*
+
+| DSRM Activity | Project Phase | Description |
+| :---- | :---- | :---- |
+| 1\. Problem Identification and Motivation | Literature review and problem analysis | Identified the fragmentation of security controls across CI/CD, deployment, and runtime stages in Kubernetes environments |
+| 2\. Define Objectives for a Solution | Research questions and objectives | Defined four research questions and eight objectives targeting continuous compliance automation |
+| 3\. Design and Development | Architecture design and implementation | Designed the six-layer architecture and implemented it across infrastructure, platform, application, CI/CD, runtime, and observability layers |
+| 4\. Demonstration | Production deployment | Deployed the complete framework on Oracle Cloud Infrastructure with three-node Kubernetes cluster |
+| 5\. Evaluation | Compliance mapping and coverage analysis | Evaluated against NIST SP 800-207, MITRE ATT\&CK, pipeline effectiveness, and policy coverage metrics |
+| 6\. Communication | This report | Communicated findings through this MIS final report |
+
+## **3.2 Design Principles**
+
+The design of the Zero-Trust DevSecOps framework is guided by five principles derived from the literature review and the Zero Trust philosophy. Table 5 presents these principles and their rationale.
+
+*Table 5: Design principles for the Zero-Trust DevSecOps framework*
+
+| \# | Principle | Description | Rationale |
+| :---- | :---- | :---- | :---- |
+| 1 | Never Trust, Always Verify | Every request, identity, and resource access must be authenticated and authorised regardless of network location | Core NIST SP 800-207 tenet; eliminates implicit trust |
+| 2 | Policy as Code | Security policies are expressed as version-controlled, machine-readable code that is automatically enforced | Enables automated compliance verification and audit trails |
+| 3 | Defence in Depth | Security controls are layered across multiple stages of the delivery lifecycle | No single control point is sufficient; redundancy reduces risk |
+| 4 | GitOps as Source of Truth | Git repositories serve as the single source of truth for infrastructure, application, and security configurations | Provides auditability, reproducibility, and rollback capability |
+| 5 | Shift Left and Extend Right | Security checks begin at the earliest pipeline stage and extend through runtime and post-deployment monitoring | Maximises the window for security verification |
+
+## **3.3 Implementation Strategy**
+
+The implementation followed an iterative, seven-phase approach aligned with the six-layer architecture:
+
+1. **Infrastructure provisioning:** Terraform definitions for OCI networking, compute, and security configuration.  
+2. **Platform establishment:** Kubernetes cluster setup with Argo CD GitOps, namespace isolation, and infrastructure components.  
+3. **Application development:** FreshBonds microservices with built-in security features (JWT, bcrypt, RBAC, rate limiting).  
+4. **CI/CD pipeline construction:** Six GitHub Actions workflows with ten integrated security tools and automated blocking gates.  
+5. **Policy deployment:** Kyverno and OPA policy definitions for pod security, image verification, and resource management.  
+6. **Runtime security:** Falco deployment with custom eBPF rules mapped to MITRE ATT\&CK, Falcosidekick integration.  
+7. **Observability and AI enrichment:** Prometheus, Grafana, Loki monitoring stack with AI Security Collector for Falco event enrichment.
+
+## **3.4 Evaluation Criteria**
 
 The framework is evaluated using five criteria:
 
-| Criterion | Metric | Method |
-|-----------|--------|--------|
-| **Compliance Coverage** | % of NIST 800-207 tenets satisfied | Manual mapping with evidence |
-| **Prevention Effectiveness** | % of non-compliant deployments blocked | Pipeline execution analysis |
-| **Detection Coverage** | % of MITRE ATT&CK techniques detected | Rule-to-technique mapping |
-| **Operational Efficiency** | Mean time from event to alert | Monitoring pipeline measurement |
-| **AI Enrichment Value** | Qualitative assessment of AI report utility | Sample report analysis |
-
-### 3.6 Ethical Considerations
-
-The research was conducted on infrastructure and services solely owned and operated by the author. No real user data was processed — all data in the system is synthetic test data. The MongoDB Atlas database contains only seeded test accounts. The AI enrichment component does not process personally identifiable information; it analyses security event metadata (process names, system call types, container identifiers) only. Azure OpenAI usage complies with Microsoft's Responsible AI principles, and no sensitive data is transmitted to external APIs.
-
----
-
-## Chapter 4: System Architecture and Design
-
-### 4.1 Architecture Overview
-
-The FreshBonds Zero-Trust DevSecOps platform is architected as a six-layer system, where each layer implements independent security controls that collectively provide continuous compliance:
-
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                      LAYER 6: OBSERVABILITY                       │
-│  Prometheus │ Grafana │ Loki │ Promtail │ PagerDuty │ AI Reports │
-└───────────────────────────────────────────────────────────────────┘
-┌───────────────────────────────────────────────────────────────────┐
-│                  LAYER 5: RUNTIME SECURITY                        │
-│  Falco (eBPF) │ 14 MITRE ATT&CK Rules │ Falcosidekick │ AI      │
-└───────────────────────────────────────────────────────────────────┘
-┌───────────────────────────────────────────────────────────────────┐
-│                    LAYER 4: CI/CD PIPELINE                        │
-│  6 Pipelines │ Trivy │ Checkov │ Gitleaks │ Syft │ OPA │ Kyverno │
-└───────────────────────────────────────────────────────────────────┘
-┌───────────────────────────────────────────────────────────────────┐
-│                   LAYER 3: APPLICATION                            │
-│  API Gateway │ User Service │ Product Service │ Frontend │ JWT   │
-└───────────────────────────────────────────────────────────────────┘
-┌───────────────────────────────────────────────────────────────────┐
-│                    LAYER 2: PLATFORM                              │
-│  Kubernetes v1.28 │ ArgoCD │ SealedSecrets │ Calico │ Ingress   │
-└───────────────────────────────────────────────────────────────────┘
-┌───────────────────────────────────────────────────────────────────┐
-│                   LAYER 1: INFRASTRUCTURE                         │
-│  OCI │ Terraform │ ARM64 Instances │ VCN │ Security Lists │ LB   │
-└───────────────────────────────────────────────────────────────────┘
-```
-
-**Design Rationale**: Each layer operates independently — a failure or compromise at one layer does not disable security controls at other layers. For example, if a CI/CD pipeline vulnerability scanner misses a CVE, the Falco runtime monitor may still detect the resulting exploit behaviour. Conversely, if a Falco rule misses a subtle attack, the CI/CD SBOM provides forensic evidence of the vulnerable component for post-incident analysis.
-
-### 4.2 Infrastructure Layer Design
-
-The infrastructure is provisioned on Oracle Cloud Infrastructure (OCI) using Terraform, implementing the following security controls:
-
-**Compute Architecture**:
-
-| Instance | Role | Shape | vCPU | RAM | Subnet |
-|----------|------|-------|------|-----|--------|
-| control-plane | K8s Master | VM.Standard.A1.Flex (ARM64) | 2 | 8 GB | Public (10.0.0.0/24) |
-| worker-1 | K8s Worker | VM.Standard.A1.Flex (ARM64) | 1 | 8 GB | Private (10.0.1.0/24) |
-| worker-2 | K8s Worker | VM.Standard.A1.Flex (ARM64) | 1 | 8 GB | Private (10.0.1.0/24) |
-
-**Network Segmentation**: Worker nodes reside in a private subnet with no direct internet access, communicating externally only through the control plane acting as a NAT gateway. This enforces the Zero Trust principle that worker nodes should not be directly addressable from the internet.
-
-**Infrastructure Security Controls**:
-- Instance Metadata Service v2 (IMDSv2) enforced, disabling legacy endpoints susceptible to SSRF attacks (CKV_OCI_5)
-- PV encryption in transit enabled for all instances
-- SSH key-based authentication exclusively — no password-based access
-- Terraform state stored in OCI Object Storage with versioning
-
-**IaC Security Validation**: All Terraform code is scanned with Checkov in CI/CD, with documented exceptions (`#checkov:skip` annotations) for security trade-offs such as SSH access from internet (required for control plane management, mitigated by key-based authentication).
-
-### 4.3 Kubernetes Platform Layer
-
-The Kubernetes platform layer implements cluster-level security controls:
-
-**GitOps with ArgoCD**: The entire cluster state is declared in Git and reconciled automatically by ArgoCD. The bootstrap application uses recursive directory scanning (`directory.recurse: true`) with automated sync enabled (`automated.prune: true`, `automated.selfHeal: true`). This ensures that any manual changes to cluster state are automatically reverted, enforcing the principle of declarative security intent.
-
-**Namespace Isolation**: Workloads are separated into purpose-specific namespaces:
-
-| Namespace | Purpose | Zero Trust Function |
-|-----------|---------|---------------------|
-| `dev` | Application workloads | Blast radius containment |
-| `monitoring` | Prometheus, Grafana, Loki | Observability isolation |
-| `falco` | Runtime security monitoring | Security tool protection |
-| `sealed-secrets` | Secret decryption controller | Least-privilege secret management |
-| `argocd` | GitOps controller | Deployment pipeline isolation |
-| `ingress-nginx` | Edge traffic handling | External boundary control |
-| `cert-manager` | TLS certificate management | Encryption lifecycle |
-| `ai-security` | AI Security Collector | AI enrichment isolation |
-
-**Sealed Secrets**: Bitnami SealedSecrets enables encrypting Kubernetes Secrets with a public key, so that encrypted secrets can be safely committed to Git. Only the in-cluster controller possesses the private key for decryption. This solves the GitOps secret management problem: all configuration, including secrets, can be version-controlled without exposing sensitive data.
-
-**TLS Everywhere**: cert-manager with Let's Encrypt ClusterIssuer automatically provisions and renews TLS certificates for all ingress endpoints, ensuring all external communication is encrypted.
-
-### 4.4 Application Layer Architecture
-
-The application layer consists of four microservices implementing security at the application code level:
-
-```
-                    ┌──────────────────┐
-                    │     Frontend     │
-                    │  React + Vite    │
-                    │  (nginx:alpine)  │
-                    └────────┬─────────┘
-                             │ HTTPS
-                             ▼
-                    ┌──────────────────┐
-                    │   API Gateway    │  ← Helmet.js (CSP, HSTS, X-Frame)
-                    │   Express.js     │  ← CORS whitelist
-                    │   Port 8080      │  ← Body size limits (1MB)
-                    └────────┬─────────┘
-                             │ HTTP (cluster-internal)
-                ┌────────────┴────────────┐
-                ▼                         ▼
-       ┌────────────────┐       ┌─────────────────┐
-       │  User Service  │       │ Product Service  │
-       │  bcrypt(14)    │       │ Ownership RBAC   │
-       │  JWT(8h)       │       │ Text search      │
-       │  Rate limiting │       │ Input validation │
-       │  Audit logging │       │ Field whitelisting│
-       └────────┬───────┘       └────────┬─────────┘
-                └────────────┬───────────┘
-                             ▼
-                    ┌──────────────────┐
-                    │  MongoDB Atlas   │
-                    │  TLS in transit  │
-                    │  Encrypted rest  │
-                    └──────────────────┘
-```
-
-**Application Security Controls**:
-
-| Control | Implementation | Service |
-|---------|---------------|---------|
-| Authentication | bcrypt (14 rounds), JWT (8h expiry) | User Service |
-| Anti-enumeration | Identical error messages for invalid email/password | User Service |
-| Account lockout | Lock after 5 failed attempts for 2 hours | User Service |
-| Rate limiting | 5 registrations/15min, 10 logins/15min | User Service |
-| Input validation | `validator` library with HTML escaping, regex patterns | All services |
-| Security headers | Helmet.js with CSP, HSTS, X-Frame-Options, X-Content-Type-Options | API Gateway |
-| Field whitelisting | Explicit allowlist for updatable fields | Product Service |
-| Ownership enforcement | Farmers can only modify their own products | Product Service |
-| Structured audit logging | JSON-formatted login events for Grafana/Loki alerting | User Service |
-
-**Container Hardening**: All service containers follow a consistent security pattern:
-
-```dockerfile
-FROM node:18-alpine AS builder
-# Build phase with dev dependencies
-
-FROM node:18-alpine
-# Patch known CVEs
-RUN apk update && apk upgrade --no-cache libcrypto3 libssl3
-
-# Non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-USER nodejs
-
-# Signal handling
-RUN npm install dumb-init
-ENTRYPOINT ["dumb-init", "--"]
-
-HEALTHCHECK --interval=30s CMD wget -qO- http://localhost:PORT/health || exit 1
-```
-
-This pattern ensures: minimal base image (Alpine), patched CVEs, non-root execution, proper signal handling (dumb-init for PID 1), and container-level health monitoring.
-
-### 4.5 Security Architecture
-
-The security architecture implements defence-in-depth across three temporal phases:
-
-**Pre-Deployment (Shift-Left)**:
-- **SAST (Static Application Security Testing)**: ESLint security rules in PR validation, security anti-pattern detection (hardcoded IPs, debug flags, security TODOs)
-- **SCA (Software Composition Analysis)**: Trivy image scanning for OS and library CVEs, npm audit for dependency vulnerabilities
-- **IaC Security**: Checkov scanning of Terraform files and Kubernetes manifests
-- **Secret Detection**: Gitleaks scanning for leaked credentials in code
-- **Supply Chain Integrity**: Syft SBOM generation in SPDX and CycloneDX formats
-- **Policy Validation**: OPA/Conftest and Kyverno CLI validation of Kubernetes manifests
-
-**Deploy-Time (Admission Control)**:
-- Kyverno ClusterPolicies in enforce mode: non-root containers, no privilege escalation, capability dropping, resource limits, image registry restrictions, tag policies
-- Pod Security Standards (Restricted profile) via security contexts
-
-**Runtime (Continuous Monitoring)**:
-- Falco eBPF kernel instrumentation with 14 custom rules + 100+ built-in rules
-- Prometheus metric-based anomaly alerts (CPU, memory, restart frequency, OOM kills)
-- Loki log-based security alerts (auth failures, brute force, enumeration attacks)
-- AI enrichment via Azure OpenAI for high-severity events
-
-### 4.6 GitOps and CI/CD Architecture
-
-The CI/CD architecture comprises six specialised pipelines:
-
-```
-Developer Push/PR
-       │
-       ▼
-┌─────────────────────────────────────┐
-│ Pipeline 1: PR Validation (< 2min) │
-│ • ESLint + yamllint                 │
-│ • Gitleaks secret scanning          │
-│ • kubeval manifest validation       │
-│ • Terraform format check            │
-│ • Security anti-pattern detection   │
-│ • PR size analysis                  │
-└──────────────┬──────────────────────┘
-               │ Merge to main
-               ▼
-┌─────────────────────────────────────┐  ┌──────────────────────────────────┐
-│ Pipeline 2: App CI/CD (8-10min)     │  │ Pipeline 3: Terraform (2-4min)  │
-│ • OPA/Conftest policy validation    │  │ • terraform fmt + validate       │
-│ • Kyverno CLI policy validation     │  │ • Checkov IaC scan               │
-│ • Checkov K8s manifest scan         │  │ • Plan preview (PR) / Apply     │
-│ • Docker buildx (arm64 + amd64)    │  │ • Manual approval gate          │
-│ • Syft SBOM (SPDX + CycloneDX)    │  └──────────────────────────────────┘
-│ • Trivy image vulnerability scan    │
-│ • Trivy embedded secret scan        │
-│ • Push to Docker Hub                │
-│ • GitOps manifest update            │
-│ • ArgoCD auto-sync                  │
-└─────────────────────────────────────┘
-
-Monthly Scheduled (1st of month)
-       │
-       ├──► Pipeline 4: Security Audit (2 AM UTC)
-       │    • Trivy scan all production images
-       │    • npm audit all service dependencies
-       │    • OPA/Kyverno policy re-validation
-       │    • Checkov IaC re-scan (TF + K8s + Docker)
-       │    • GitHub Issue creation for findings
-       │    • PagerDuty alert for CRITICALs
-       │
-       └──► Pipeline 5: Secret Rotation (3 AM UTC)
-            • MongoDB password rotation (Atlas API)
-            • JWT secret regeneration
-            • SealedSecret re-encryption
-            • GitOps commit + ArgoCD sync
-            • Rolling restart verification
-            • Audit trail logging
-
-Pipeline 6: AI Collector CI/CD
-• Docker buildx (ARM64)
-• Trivy image scan
-• Syft SBOM generation
-• GitOps manifest update
-```
-
-**Zero Trust Quality Gates**: The App CI/CD pipeline implements hard gates that block deployment:
-- CRITICAL vulnerability count > 0 → **DEPLOYMENT BLOCKED**
-- OPA policy violations → **DEPLOYMENT BLOCKED**
-- Kyverno policy violations → **DEPLOYMENT BLOCKED**
-- Embedded secrets detected → **DEPLOYMENT BLOCKED**
-
-### 4.7 Observability Architecture
-
-The observability stack implements three data flows:
-
-**Flow 1 — Metrics (Prometheus → AlertManager → PagerDuty)**:
-- Prometheus scrapes Kubernetes metrics, node-exporter, and application endpoints at 30-second intervals
-- 19 custom PrometheusRule alerts covering service health, resource utilisation, and Falco operational status
-- AlertManager routes critical alerts to PagerDuty with severity-based escalation
-
-**Flow 2 — Logs (Promtail → Loki → Grafana → PagerDuty)**:
-- Promtail DaemonSet collects container logs from `/var/log/pods`
-- CRI parsing pipeline extracts structured fields (level, message, timestamp)
-- Error-specific scrape config filters and relabels for alerting
-- 14 Grafana alert rules monitor for application errors, authentication failures, brute force attacks, and payment processing failures
-
-**Flow 3 — Security Events (Falco → Falcosidekick → Multi-destination)**:
-- Falco eBPF monitor captures kernel-level security events
-- Falcosidekick routes events to: AlertManager (for PagerDuty), AI Collector (for GPT-4o-mini enrichment), and web dashboard
-- AI Collector pushes enriched events to Loki and Slack
-
-### 4.8 AI-Augmented Security Monitoring
-
-The AI Security Collector is a FastAPI-based Python service that provides contextual enrichment for Falco security events:
-
-**Architecture**:
-```
-Falco (eBPF) → Falcosidekick → POST /events → AI Collector
-                                                     │
-                                    ┌────────────────┼─────────────────┐
-                                    ▼                ▼                 ▼
-                              Azure OpenAI      Prometheus         Loki
-                              GPT-4o-mini       (metrics)          (storage)
-                                    │                                 │
-                                    ▼                                 ▼
-                              Slack webhook                  Grafana dashboards
-                              PagerDuty                      LogQL queries
-```
-
-**Enrichment Process**: For each Warning/Error/Critical Falco event:
-1. Parse event metadata (container, process, user, rule)
-2. Query Prometheus for container metrics (CPU, memory, restart rate)
-3. Generate AI incident report via Azure OpenAI GPT-4o-mini with structured prompt
-4. Deduplicate within configurable window (default 60s)
-5. Push enriched event to Loki with structured labels
-6. Send formatted notification to Slack
-7. Display in Grafana AI Reports dashboard
-
-**AI Report Structure**:
-- **Threat Assessment**: What happened and why it is suspicious
-- **Investigation Steps**: Specific commands and log queries to investigate
-- **Recommended Actions**: Mitigation and remediation steps
-- **Severity Rating**: AI-assessed severity with confidence level
-
-This integration pattern — using an LLM to generate human-readable threat narratives from raw eBPF security telemetry — provides an automated "Tier 1 SOC analyst" capability that reduces mean time to understand (MTTU) for security events.
-
----
-
-## Chapter 5: Implementation
-
-### 5.1 Infrastructure Provisioning with Terraform
-
-The infrastructure is defined in Terraform HCL files, implementing the design described in Section 4.2:
-
-**Provider Configuration**:
-```hcl
-terraform {
-  required_version = ">= 1.14.0"
-  required_providers {
-    oci = {
-      source  = "oracle/oci"
-      version = "~> 8.2.0"
-    }
-  }
-}
-```
-
-**State Management**: Terraform state is stored remotely in OCI Object Storage using the S3-compatible backend:
-```hcl
-backend "s3" {
-  bucket   = "terraform-state"
-  key      = "zero-trust-devsecops/terraform.tfstate"
-  endpoint = "https://bmeduisaz7tv.compat.objectstorage.ap-mumbai-1.oraclecloud.com"
-}
-```
-
-**Instance Security Hardening**: All instances enforce IMDSv2 and PV encryption:
-```hcl
-instance_options {
-  are_legacy_imds_endpoints_disabled = true  # CKV_OCI_5
-}
-launch_options {
-  is_pv_encryption_in_transit_enabled = true
-}
-```
-
-**Network Security Lists**: Ingress rules follow the principle of least privilege, allowing only required ports:
-
-| Port | Source | Purpose | Zero Trust Justification |
-|------|--------|---------|-------------------------|
-| 22 | 0.0.0.0/0 | SSH (control plane) | Key-based auth only; required for initial setup |
-| 6443 | 0.0.0.0/0 | Kubernetes API | External kubectl access (TLS + RBAC protected) |
-| 10250 | 10.0.0.0/16 | Kubelet | Internal cluster communication only |
-| 2379-2380 | 10.0.0.0/16 | etcd | Internal cluster communication only |
-| 30000-32767 | 10.0.0.0/16 | NodePort | Internal service routing |
-
-The Terraform pipeline enforces these configurations through Checkov scanning, blocking any changes that introduce security regressions.
-
-### 5.2 Kubernetes Cluster Configuration
-
-**ArgoCD Bootstrap Pattern**: A single bootstrap Application monitors the `clusters/test-cluster/` directory recursively, automatically discovering and deploying all subdirectory resources:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: bootstrap-app
-  namespace: argocd
-spec:
-  source:
-    repoURL: https://github.com/emiresh/zero-trust-devsecops.git
-    targetRevision: main
-    path: clusters/test-cluster
-    directory:
-      recurse: true
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
-```
-
-**Self-Healing**: When `selfHeal: true` is enabled, any manual modification to cluster resources — whether accidental or malicious — is automatically reverted to the Git-declared state. This provides both drift detection and drift remediation, two key compliance requirements.
-
-**Infrastructure Components Deployed via ArgoCD**:
-
-| Component | Version | Namespace | Purpose |
-|-----------|---------|-----------|---------|
-| kube-prometheus-stack | 65.1.1 | monitoring | Metrics + alerting |
-| Loki | 6.46.0 | monitoring | Log aggregation |
-| Promtail | 6.16.6 | monitoring | Log collection |
-| NGINX Ingress | 4.8.3 | ingress-nginx | Edge routing + TLS termination |
-| Falco | 7.0.0 | falco | Runtime security |
-| cert-manager | v1.13.3 | cert-manager | TLS certificate lifecycle |
-| Sealed Secrets | 2.13.2 | sealed-secrets | Secret encryption |
-| Local Path Provisioner | 0.0.33 | local-path-storage | Persistent storage |
-
-### 5.3 Microservices Implementation
-
-The FreshBonds application comprises four microservices totalling approximately 6,612 lines of JavaScript/JSX code:
-
-**API Gateway** (515 LOC): Reverse proxy using `http-proxy-middleware`, routing `/api/users/*` and `/api/products/*` to backend services. Implements Helmet.js Content Security Policy with explicit CSP directives:
-
-```javascript
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"]
-    }
-  }
-}));
-```
-
-**User Service** (1,023 LOC): Full authentication system with notable security features:
-- **bcrypt with 14 salt rounds** (above the industry-standard 10, providing 16× more brute-force resistance)
-- **JWT secret validation** enforcing minimum 32-character secret length at startup, terminating the process if the requirement is not met
-- **Anti-enumeration** returning identical error messages for invalid email and invalid password
-- **Structured audit logging** in JSON format, enabling Grafana/Loki-based login security alerting:
-
-```javascript
-console.log(JSON.stringify({
-  event: 'LOGIN_FAILED',
-  email: email,
-  reason: 'INVALID_PASSWORD',
-  ip: req.ip,
-  userAgent: req.get('User-Agent'),
-  timestamp: new Date().toISOString()
-}));
-```
-
-**Product Service** (1,037 LOC): CRUD service with role-based access control:
-- **Ownership middleware** ensuring farmers can only modify their own products
-- **MongoDB text search** with weighted fields (name: 10, description: 5)
-- **Input validation** with ObjectId format verification and harvest date range enforcement
-
-**Frontend** (4,037 LOC): React 18 + Vite + TailwindCSS with multi-stage Docker build producing an nginx-served static site.
-
-### 5.4 CI/CD Pipeline Implementation
-
-The six pipelines total 2,837 lines of GitHub Actions YAML, implementing the architecture described in Section 4.6.
-
-**Pipeline 1: PR Validation** (316 lines, triggered on pull requests):
-
-```yaml
-# Key security checks
-- name: Secret Scanning (Gitleaks)
-  uses: gitleaks/gitleaks-action@v2
-  
-- name: K8s Manifest Validation
-  run: |
-    kubeval --strict \
-      clusters/test-cluster/00-namespaces/*.yaml \
-      clusters/test-cluster/10-apps/db-init-job.yaml
-      
-- name: Security Anti-Patterns
-  run: |
-    # Detect hardcoded IPs
-    grep -rn '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}' src/ || true
-    # Detect debug flags
-    grep -rn 'DEBUG\|console\.log\|TODO.*security' src/ || true
-```
-
-**Pipeline 2: App CI/CD** (523 lines, triggered on push to main):
-
-The build-and-scan job implements multi-layered security scanning:
-
-```yaml
-# Stage 1: Policy Validation
-- name: OPA/Conftest Policy Check
-  run: conftest test clusters/ -p policies/opa/ --all-namespaces
-  
-- name: Kyverno Policy Check
-  run: kyverno apply policies/kyverno/ --resource clusters/
-
-# Stage 2: Build + SBOM
-- name: Build Docker Image
-  uses: docker/build-push-action@v5
-  with:
-    platforms: linux/amd64,linux/arm64
-    
-- name: Generate SBOM (SPDX)
-  run: syft $IMAGE -o spdx-json > sbom-spdx.json
-  
-- name: Generate SBOM (CycloneDX)
-  run: syft $IMAGE -o cyclonedx-json > sbom-cyclonedx.json
-
-# Stage 3: Security Scanning
-- name: Vulnerability Scan
-  run: |
-    trivy image --severity CRITICAL,HIGH --format sarif $IMAGE
-    CRITICAL_COUNT=$(trivy image --severity CRITICAL --format json $IMAGE | jq '.Results[].Vulnerabilities | length')
-    if [ "$CRITICAL_COUNT" -gt 0 ]; then
-      echo "CRITICAL vulnerabilities found. Blocking deployment."
-      exit 1
-    fi
-
-- name: Secret Scan
-  run: trivy image --scanners secret --format json $IMAGE
-```
-
-**Pipeline 4: Monthly Security Scan** (610 lines):
-
-The most comprehensive pipeline, scanning across four dimensions:
-
-```yaml
-# Dimension 1: Image Vulnerabilities
-scan-images:
-  strategy:
-    matrix:
-      service: [api-gateway, user-service, product-service, frontend]
-  steps:
-    - run: trivy image --severity CRITICAL,HIGH,MEDIUM,LOW --format sarif $IMAGE
-    - if: critical_count > 0
-      run: |  # Create GitHub Issue
-        gh issue create --title "CRITICAL: $SERVICE vulnerabilities" --body "$REPORT"
-      
-# Dimension 2: Dependency Audit
-scan-dependencies:
-  strategy:
-    matrix:
-      service: [api-gateway, user-service, product-service, frontend]
-  steps:
-    - run: npm audit --audit-level=critical
-
-# Dimension 3: Policy Compliance
-scan-policies:
-  steps:
-    - run: conftest test clusters/ -p policies/opa/
-    - run: kyverno apply policies/kyverno/ --resource clusters/
-    
-# Dimension 4: IaC Security
-scan-iac:
-  steps:
-    - run: checkov -d . --framework terraform,kubernetes,dockerfile
-```
-
-**Pipeline 5: Secret Rotation** (471 lines):
-
-Automated monthly rotation of all secrets:
-
-```yaml
-rotate-secrets:
-  steps:
-    - name: Generate New MongoDB Password
-      run: NEW_PASSWORD=$(openssl rand -base64 32)
-      
-    - name: Update MongoDB Atlas
-      run: |
-        curl -X PATCH \
-          "https://cloud.mongodb.com/api/atlas/v1.0/groups/$PROJECT_ID/databaseUsers/admin/$USERNAME" \
-          -d '{"password": "$NEW_PASSWORD"}'
-          
-    - name: Generate New JWT Secret
-      run: NEW_JWT=$(openssl rand -hex 64)
-      
-    - name: Seal New Secrets
-      run: |
-        kubectl create secret generic freshbonds-secret \
-          --from-literal=MONGODB_URI="mongodb+srv://...:$NEW_PASSWORD@..." \
-          --from-literal=JWT_SECRET="$NEW_JWT" \
-          --dry-run=client -o yaml | \
-        kubeseal --cert sealed-secrets-cert.pem --format yaml \
-          > apps/freshbonds/templates/sealed-secret.yaml
-          
-    - name: Commit and Push (GitOps)
-      run: |
-        git add apps/freshbonds/templates/sealed-secret.yaml
-        git commit -m "chore: rotate secrets [$(date +%Y-%m-%d)]"
-        git push
-        
-    - name: Verify Rolling Restart
-      run: kubectl rollout status deployment -n dev --timeout=300s
-```
-
-### 5.5 Policy-as-Code Implementation
-
-**Kyverno Policies** (2 policy files, 9 rules, enforce mode):
-
-*Pod Security Policy* (`policies/kyverno/pod-security.yaml`):
-
-| Rule | Scope | Enforcement |
-|------|-------|-------------|
-| `run-as-non-root` | Deployments in production, dev | `runAsNonRoot: true` required |
-| `disallow-privileged` | All Deployments | `privileged: false` required |
-| `require-resource-limits` | All Deployments | CPU and memory limits required |
-| `drop-all-capabilities` | All Deployments | Must drop ALL Linux capabilities |
-| `disallow-privilege-escalation` | All Deployments | `allowPrivilegeEscalation: false` |
-| `read-only-root-filesystem` | Production Deployments | `readOnlyRootFilesystem: true` |
-
-*Image Verification Policy* (`policies/kyverno/image-verification.yaml`):
-
-| Rule | Scope | Enforcement |
-|------|-------|-------------|
-| `disallow-latest-tag` | All Deployments | Cannot use `:latest` tag |
-| `require-approved-registry` | Production | docker.io, ghcr.io, gcr.io only |
-| `require-image-pull-policy` | All Deployments | `Always` or `IfNotPresent` |
-
-**OPA/Rego Policies** (2 policy files, 16 rules):
-
-*Security Policy* (`policies/opa/security.rego`): 13 rules covering non-root, no-privileged, resource limits, probes, privilege escalation, latest tag, approved registries, hostPath volumes, dangerous capabilities, and capability dropping.
-
-*Network Policy* (`policies/opa/network.rego`): 3 rules requiring NetworkPolicy per namespace, warning on LoadBalancer services, and flagging services without selectors.
-
-**Dual-Engine Rationale**: OPA/Conftest is used for CI/CD pipeline validation because it can evaluate arbitrary structured data (Terraform plans, Docker files, Helm charts) using the powerful Rego language. Kyverno is used for Kubernetes-native policy enforcement because its YAML-based policies are more maintainable for operations teams and integrate natively with the Kubernetes admission webhook infrastructure.
-
-### 5.6 Secret Management and Rotation
-
-The secret lifecycle is managed through three mechanisms:
-
-**1. Bitnami SealedSecrets**: All Kubernetes Secrets are encrypted with the SealedSecrets public key before committing to Git:
-
-```bash
-# Encrypt a secret
-kubeseal --cert sealed-secrets-cert.pem \
-  --format yaml < secret.yaml > sealed-secret.yaml
-```
-
-The SealedSecret controller in the cluster decrypts these using its private key, creating standard Kubernetes Secrets that pods can consume.
-
-**2. Automated Monthly Rotation** (GitHub Actions): The `secret-rotation.yml` workflow runs on the 1st of every month, rotating:
-- MongoDB credentials via Atlas API
-- JWT signing keys via OpenSSL
-- IPG payment gateway tokens
-- Callback authentication tokens
-
-**3. Rotation Audit Trail**: Every rotation is logged in `docs/rotation-logs/rotation-history.md` with:
-- Timestamp
-- Secrets rotated
-- Verification status (deployment health check)
-- Operator (automated/manual)
-
-**Secret Distribution**: Rotated secrets are sealed, committed to Git, pushed, and ArgoCD automatically syncs the new SealedSecret to the cluster. Pods are rolled with `kubectl rollout restart` to pick up the new secrets. Health checks verify successful rollout within a 5-minute timeout.
-
-### 5.7 Runtime Security Implementation
-
-**Falco Configuration**: Falco is deployed as a DaemonSet using the modern eBPF driver (required for Oracle Cloud ARM64 instances) with the following configuration:
-
-```yaml
-driver:
-  kind: modern_ebpf
-
-falco:
-  rules_files:
-    - /etc/falco/falco_rules.yaml       # 100+ built-in rules
-    - /etc/falco/k8s_audit_rules.yaml    # K8s audit rules
-    - /etc/falco/rules.d                 # Custom rules
-  json_output: true
-  priority: notice
-```
-
-**14 Custom Falco Rules**: Each rule is mapped to a MITRE ATT&CK technique:
-
-| Rule | Priority | MITRE Tactic | MITRE Technique |
-|------|----------|-------------|-----------------|
-| Shell Spawned in Container | WARNING | Execution | T1059 |
-| Package Management in Container | WARNING | Persistence | T1546 |
-| Detect Crypto Mining | CRITICAL | Impact | T1496 |
-| Read Sensitive File | WARNING | Credential Access | T1552 |
-| Privilege Escalation via Setuid | CRITICAL | Privilege Escalation | T1548 |
-| Reverse Shell | CRITICAL | Execution | T1059.004 |
-| Container Escape Attempt | CRITICAL | Privilege Escalation | T1611 |
-| Outbound Suspicious Port | WARNING | Command & Control | T1571 |
-| Suspicious File Modification | CRITICAL | Persistence | T1543 |
-| Network Reconnaissance | WARNING | Discovery | T1046 |
-| Suspicious DNS Query | WARNING | Command & Control | T1071.004 |
-| Large Data Transfer | WARNING | Exfiltration | T1048 |
-| Read Sensitive File Untrusted | WARNING | Credential Access | T1552.001 |
-
-**Falcosidekick Integration**: Routes events to:
-- **AlertManager** (port 9093): For PagerDuty alerting
-- **AI Collector** (`ai-collector.ai-security:8000/events`): For GPT-4o-mini enrichment
-- **Redis + Web UI**: For real-time dashboard
-
-**Sensitive File Macro**: Defines the scope of files monitored for unauthorised reads:
-```yaml
-- macro: sensitive_files
-  condition: >
-    fd.name startswith /etc/shadow or
-    fd.name startswith /etc/sudoers or
-    fd.name startswith /etc/pam.d or
-    fd.name startswith /root/.ssh or
-    fd.name startswith /home/.ssh or
-    fd.name startswith /root/.aws or
-    fd.name startswith /root/.kube
-```
-
-### 5.8 Monitoring and Alerting Implementation
-
-**Prometheus Stack**: Deployed via kube-prometheus-stack Helm chart (v65.1.1) with:
-- 1 Prometheus replica with 7-day retention and 10GiB storage cap
-- 30-second scrape interval
-- AlertManager with PagerDuty integration (integration key stored as SealedSecret)
-- 19 custom PrometheusRule alerts across two groups (application + infrastructure)
-
-**AlertManager Routing Configuration**:
-```yaml
-route:
-  receiver: 'pagerduty-notifications'
-  group_by: ['alertname', 'cluster', 'service']
-  routes:
-    - match:
-        severity: critical
-      receiver: 'pagerduty-critical'
-    - match:
-        alertname: Watchdog
-      receiver: 'null'
-```
-
-**Loki Log Pipeline**: Promtail DaemonSet scrapes container logs with a two-stage pipeline:
-1. **General pipeline**: CRI parsing → JSON extraction → namespace/pod labelling
-2. **Error pipeline**: Filters ERROR/WARN only → adds severity labels → enables alerting
-
-**Grafana Alert Rules** (14 rules across 3 categories):
-
-*Application Alerts*: Error rate high, crash detection, MongoDB failures, 5xx errors, payment failures
-*Log Alerts*: High error rate, MongoDB disconnection, payment failures, auth failure rate, pod restart loops
-*Login Security Alerts*: Brute force detection, single-user targeting, suspicious IP patterns, email enumeration
-
-**PagerDuty Integration**: Dual-service architecture:
-- **Infrastructure service (PKIUIBN)**: Receives AlertManager alerts (Prometheus + Falco)
-- **Application service (PRZZM0D)**: Receives Grafana Loki alerts + direct app alerts
-
-### 5.9 AI Security Collector Implementation
-
-The AI Security Collector is a 1,292-line Python FastAPI application deployed in the `ai-security` namespace:
-
-**Core Component: Falco Collector** (`collectors/falco_collector.py`):
-
-```python
-@app.post("/events")
-async def receive_falco_event(request: Request):
-    event = await request.json()
-    priority = event.get("priority", "Unknown")
-    
-    # Store event with structured labels for Loki
-    enriched_event = {
-        "timestamp": event.get("time"),
-        "priority": priority,
-        "rule": event.get("rule"),
-        "output": event.get("output"),
-        "container_name": output_fields.get("container.name"),
-        "container_image": output_fields.get("container.image.repository"),
-        "namespace": output_fields.get("k8s.ns.name"),
-        "pod_name": output_fields.get("k8s.pod.name"),
-    }
-    
-    # AI enrichment for high-severity events
-    if priority in ["Critical", "Error", "Warning"]:
-        asyncio.create_task(
-            self._process_ai_and_notify(enriched_event)
-        )
-    
-    # Push to Loki
-    await self.loki_client.push(enriched_event)
-```
-
-**AI Incident Reporter** (`advisors/incident_reporter.py`):
-
-```python
-async def generate_report(self, event: dict) -> str:
-    prompt = f"""Analyze this Kubernetes security event:
-    Rule: {event['rule']}
-    Priority: {event['priority']}
-    Container: {event['container_name']}
-    Namespace: {event['namespace']}
-    
-    Provide: 1) Threat assessment 2) Investigation steps 
-    3) Recommended actions 4) Severity rating"""
-    
-    response = await asyncio.to_thread(
-        self.client.chat.completions.create,
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": SYSTEM_PROMPT},
-                  {"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=500
-    )
-    return response.choices[0].message.content
-```
-
-**Deduplication**: A configurable deduplication window (default 60 seconds) prevents duplicate AI reports for the same event pattern, controlling Azure OpenAI API costs.
-
-**Grafana Integration**: The AI Collector exposes REST API endpoints consumed by the Grafana Infinity plugin:
-- `GET /reports` — Event list with priority distribution
-- `GET /reports/latest/text` — Full AI analysis narrative
-- `GET /health` — Service health status
-- `GET /stats` — Operational statistics
-
-The Grafana "AI Security Reports" dashboard visualises report priority distribution, timeline trends, most-triggered rules, and displays the full GPT-4o-mini analysis text for the latest event.
-
----
-
-## Chapter 6: Evaluation and Results
-
-### 6.1 NIST SP 800-207 Compliance Mapping
-
-The framework is evaluated against the seven tenets of NIST SP 800-207 Zero Trust Architecture:
-
-| # | NIST ZTA Tenet | Implementation | Status |
-|---|---------------|----------------|--------|
-| 1 | All data sources and computing services are considered resources | Every component (pods, services, databases, secrets) is individually secured with its own security context, credentials, and access policy | ✅ Compliant |
-| 2 | All communication is secured regardless of network location | TLS termination at ingress (Let's Encrypt), internal cluster communication protected by Calico network policies, MongoDB Atlas requires TLS | ✅ Compliant |
-| 3 | Access to individual enterprise resources is granted on a per-session basis | JWT tokens with 8-hour expiry, no persistent sessions, token verified against database on each request | ✅ Compliant |
-| 4 | Access to resources is determined by dynamic policy | Kyverno (9 rules) + OPA (16 rules) + Falco (14 rules) enforce policy dynamically; policies are version-controlled and can be updated without service restart | ✅ Compliant |
-| 5 | The enterprise monitors and measures the integrity and security posture of all owned and associated assets | Prometheus metrics, Falco runtime monitoring, Trivy image scanning, Checkov IaC scanning, npm dependency auditing — continuous monitoring across all asset types | ✅ Compliant |
-| 6 | All resource authentication and authorisation are dynamic and strictly enforced before access is allowed | JWT validation on every API request, ownership middleware verifying resource access, RBAC in Kubernetes, SealedSecrets requiring cluster private key for decryption | ✅ Compliant |
-| 7 | The enterprise collects as much information as possible about the current state of assets and uses it to improve security posture | Three-flow observability (metrics, logs, security events), AI enrichment providing contextual threat analysis, monthly security audits, rotation audit trails | ✅ Compliant |
-
-**Extended Assessment against DoD ZTA Pillars**:
-
-| DoD Pillar | Implementation | Coverage |
-|------------|---------------|----------|
-| User | JWT auth, bcrypt(14), anti-enumeration, account lockout, login audit logging | Strong |
-| Device | IMDSv2 enforcement, node security hardening, Falco DaemonSet | Moderate |
-| Network/Environment | Private subnets, security lists, Calico CNI, TLS everywhere | Strong |
-| Application/Workload | Container hardening, non-root, capability drop, resource limits, pod security | Strong |
-| Data | MongoDB TLS, encrypted at rest, SealedSecrets, SBOM tracking | Strong |
-| Visibility/Analytics | Prometheus, Grafana, Loki, Falco, AI enrichment, PagerDuty | Strong |
-| Automation/Orchestration | ArgoCD GitOps, 6 CI/CD pipelines, secret rotation, self-healing | Strong |
-
-**Result**: Full compliance with all 7 NIST SP 800-207 tenets and strong coverage across all 7 DoD ZTA pillars.
-
-### 6.2 Pipeline Security Gate Effectiveness
-
-The six-pipeline architecture implements security gates at multiple stages. The following table summarises gate types and their enforcement behaviour:
-
-| Pipeline | Gate | Trigger Condition | Action |
-|----------|------|-------------------|--------|
-| PR Validation | Gitleaks | Secrets detected in code diff | **Block merge** |
-| PR Validation | kubeval | Invalid K8s manifest | **Fail check** |
-| App CI/CD | OPA/Conftest | Policy violation in manifests | **Block deployment** |
-| App CI/CD | Kyverno CLI | Policy violation in manifests | **Block deployment** |
-| App CI/CD | Trivy (CVE) | CRITICAL vulnerability count > 0 | **Block deployment** |
-| App CI/CD | Trivy (secrets) | Embedded secrets in image | **Block deployment** |
-| App CI/CD | Checkov | K8s manifest misconfiguration | **Block deployment** |
-| Terraform | Checkov | IaC security violation | **Block apply** |
-| Terraform | Manual approval | Production changes | **Require human approval** |
-| Security Scan | Trivy (all) | CRITICAL/HIGH findings | **Create GitHub Issue + PagerDuty alert** |
-| Security Scan | npm audit | CRITICAL/MODERATE dependency CVE | **Block + report** |
-
-**Effectiveness Analysis**:
-- **Pre-merge gates**: 3 checks prevent insecure code from entering the main branch
-- **Pre-deployment gates**: 5 checks prevent insecure containers from reaching production
-- **Infrastructure gates**: 2 checks prevent insecure infrastructure changes
-- **Post-deployment gates**: Monthly re-validation catches CVEs discovered after deployment
-
-The pipeline ensures that **no path exists from code commit to production that bypasses security scanning**. Even if a developer merges directly to main (bypassing PR validation), the App CI/CD pipeline independently runs all security checks before deployment.
-
-### 6.3 Policy Enforcement Coverage
-
-The 39 policy rules across three engines provide coverage across the following security domains:
-
-| Security Domain | Kyverno Rules | OPA Rules | Falco Rules | Total |
-|----------------|--------------|-----------|-------------|-------|
-| Container Privilege | 3 | 3 | 2 | 8 |
-| Resource Management | 1 | 1 | 0 | 2 |
-| Image Security | 3 | 2 | 0 | 5 |
-| Filesystem Security | 1 | 1 | 2 | 4 |
-| Capability Restrictions | 1 | 2 | 0 | 3 |
-| Network Security | 0 | 3 | 3 | 6 |
-| Credential Protection | 0 | 0 | 2 | 2 |
-| Health Monitoring | 0 | 2 | 0 | 2 |
-| Execution Control | 0 | 0 | 3 | 3 |
-| Data Protection | 0 | 0 | 2 | 2 |
-| **Total** | **9** | **16** | **14** | **39** |
-
-**Temporal Coverage**: Policies enforce security at three distinct points in time:
-
-| Phase | Engine | Enforcement Point | Latency |
-|-------|--------|-------------------|---------|
-| Build-time | OPA + Kyverno CLI in CI/CD | Before image push | Minutes |
-| Deploy-time | Kubernetes Pod Security Context | Before pod scheduling | Seconds |
-| Runtime | Falco eBPF | During execution | Milliseconds |
-
-### 6.4 Runtime Detection Capability Assessment
-
-Falco's 14 custom rules plus 100+ built-in rules provide detection across the following threat categories:
-
-**Detection Categories and Response Times**:
+1. **NIST SP 800-207 compliance:** Mapping each of the seven Zero Trust tenets to specific implementation controls and assessing compliance strength.  
+2. **Pipeline gate effectiveness:** Verifying that each security gate in the CI/CD pipeline correctly identifies and blocks security violations.  
+3. **Policy coverage:** Counting and categorising policy rules across Kyverno, OPA, and Falco to assess breadth and depth of enforcement.  
+4. **Runtime detection capability:** Assessing the range of MITRE ATT\&CK techniques covered by custom Falco rules and measuring expected detection latency.  
+5. **Supply chain integrity:** Evaluating the completeness of SBOM generation, vulnerability scanning coverage, and secret management automation.
+
+The evaluation uses repository investigation as the primary evidence method \- examining workflow files, policy definitions, Kubernetes manifests, and pipeline execution artefacts to verify that declared controls are actually implemented.
+
+## **3.5 Ethical Considerations**
+
+This project does not involve human participants, personal data, or sensitive organisational information. The FreshBonds application is a purpose-built demonstration system with synthetic data. All cloud infrastructure is provisioned on dedicated accounts under the author's control. The AI Security Collector processes synthetic security events and does not access any real user data. MongoDB Atlas credentials, JWT signing keys, and API tokens used in the project are purpose-generated for this implementation and are rotated monthly through the automated secret rotation workflow.
+
+# **4\. Design and Implementation**
+
+## **4.1 System Architecture Overview**
+
+The Zero-Trust DevSecOps framework is organised into six architectural layers, each addressing a specific security domain. This layered approach ensures that security controls are distributed across the entire delivery lifecycle, from infrastructure provisioning through runtime operation, with no single point of failure or bypass.
+
+Figure 1 presents the high-level architecture showing the six layers and their interconnections.
+
+*Figure 1: Six-layer Zero-Trust DevSecOps architecture overview*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-01-six-layer-architecture.png)
+
+![Figure 1](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-01-six-layer-architecture.png)
+
+
+## **4.2 Infrastructure Layer**
+
+The infrastructure layer is provisioned using Terraform on Oracle Cloud Infrastructure (OCI), selected for its Always Free Tier that provides ARM64 compute instances suitable for a three-node Kubernetes cluster. The infrastructure is defined across twelve Terraform files covering provider configuration, backend state, virtual cloud networking, subnets, route tables, security lists, gateways, load balancing, and compute instances.
+
+Figure 2 presents the infrastructure topology.
+
+*Figure 2: Infrastructure topology on Oracle Cloud Infrastructure*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-02-oci-infrastructure.png)
+
+![Figure 2](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-02-oci-infrastructure.png)
+
+Table 6 summarises the compute instance specifications.
+
+*Table 6: Oracle Cloud Infrastructure compute instance specifications*
+
+| Instance | Role | Shape | Architecture | vCPU | RAM | Subnet | Network Access |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| control-plane | Kubernetes Master | VM.Standard.A1.Flex | ARM64 | 2 | 8 GB | Public (10.0.0.x) | Direct internet |
+| worker-1 | Kubernetes Worker | VM.Standard.A1.Flex | ARM64 | 1 | 8 GB | Private (10.0.1.x) | NAT via control plane |
+| worker-2 | Kubernetes Worker | VM.Standard.A1.Flex | ARM64 | 1 | 8 GB | Private (10.0.1.x) | NAT via control plane |
+
+**Security hardening measures implemented in Terraform include:**
+
+* Legacy Instance Metadata Service (IMDS) endpoints disabled (are\_legacy\_imds\_endpoints\_disabled \= true) to prevent SSRF-based credential theft.  
+* In-transit encryption enabled for block volumes (is\_pv\_encryption\_in\_transit\_enabled \= true).  
+* Security lists enforcing least-privilege ingress: only ports 22 (SSH with key-based authentication), 6443 (Kubernetes API with TLS and RBAC), and internal cluster ports (10250 kubelet, 2379-2380 etcd, 30000-32767 NodePort) are permitted.  
+* Terraform state stored in OCI Object Storage with server-side encryption and IAM-authenticated access.  
+* Checkov IaC scanning integrated into the Terraform CI/CD pipeline with documented skip exceptions and justifications in .checkov.yaml.
+
+
+## **4.3 Platform Layer \- Kubernetes and GitOps**
+
+The platform layer consists of the Kubernetes cluster configuration, Argo CD GitOps deployment, and supporting infrastructure services. The cluster is configured with eight namespaces, each serving a specific function within the Zero Trust architecture.
+
+*Figure 3: Kubernetes cluster namespace and component layout*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-03-kubernetes-namespaces.png)
+
+![Figure 3](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-03-kubernetes-namespaces.png)
+
+Table 7 describes the namespace allocation.
+
+*Table 7: Kubernetes namespace allocation and purpose*
+
+| Namespace | Purpose | Key Resources |
+| :---- | :---- | :---- |
+| dev | Application workloads | Deployments, Services, SealedSecrets, ConfigMaps |
+| monitoring | Observability stack | Prometheus, Grafana, Loki, Promtail, AlertManager |
+| falco | Runtime security | Falco DaemonSet, Falcosidekick |
+| sealed-secrets | Secret encryption/decryption | SealedSecrets Controller |
+| argocd | GitOps deployment | Argo CD Server, Application Controller, Repo Server |
+| ingress-nginx | Edge traffic routing | NGINX Ingress Controller |
+| cert-manager | TLS certificate lifecycle | cert-manager, Let's Encrypt ClusterIssuer |
+| ai-security | AI-augmented monitoring | AI Security Collector (FastAPI) |
+
+**Argo CD GitOps configuration** uses a bootstrap application pattern where a single bootstrap-app.yaml Application CRD recursively discovers all YAML files in the clusters/test-cluster/ directory. This enables:
+
+* **Self-healing:** Argo CD automatically reverts manual cluster changes to match the Git state, enforcing Git as the single source of truth.  
+* **Auto-pruning:** Resources deleted from the Git repository are automatically removed from the cluster.  
+* **Retry logic:** Failed syncs are retried with exponential backoff (up to five attempts with a maximum three-minute delay).  
+* **Declarative management:** Adding new infrastructure components requires only creating a YAML file in the clusters/test-cluster/ directory.
+
+**Helm chart deployment** is managed through apps/freshbonds/, which defines Kubernetes manifests for all four microservices. The Helm values file (values.yaml) centralises configuration for image tags, replica counts, resource limits, health probe settings, and security contexts. All security contexts enforce:
+
+* runAsNonRoot: true \- prevents root execution  
+* runAsUser: 1001 \- dedicated non-root user  
+* readOnlyRootFilesystem: true \- prevents filesystem tampering  
+* capabilities.drop: \["ALL"\] \- drops all Linux capabilities  
+* allowPrivilegeEscalation: false \- prevents privilege escalation
+
+
+## **4.4 Application Layer \- Microservices Design**
+
+The FreshBonds application is a farm-to-table e-commerce platform implemented as four microservices. While the business logic is intentionally simplified (consistent with the MIS project scope), the security implementation within each service is production-grade.
+
+*Figure 4: FreshBonds microservices application architecture*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-04-microservices-architecture.png)
+
+![Figure 4](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-04-microservices-architecture.png)
+
+Table 8 describes the technology stack and security features for each microservice.
+
+*Table 8: Microservice technology stack and security features*
+
+| Service | Technology | Port | Database | Key Security Features |
+| :---- | :---- | :---- | :---- | :---- |
+| API Gateway | Express.js, Helmet, http-proxy-middleware | 8080 | \- | Content Security Policy (CSP), HSTS, X-Frame-Options, CORS origin whitelist, request body size limits (1 MB), graceful shutdown with 5-second drain period, dumb-init for PID 1 signal handling  |
+| User Service | Express.js, Mongoose 8.x, bcryptjs, jsonwebtoken | 3001 | MongoDB Atlas | bcrypt-14 password hashing (16× stronger than default bcrypt-10), JWT with configurable expiry (8 hours default), minimum 32-character JWT secret validation at startup, anti-enumeration responses (identical error for invalid email/password), account lockout (5 failed attempts → 2-hour lockout), rate limiting middleware (10 requests per 15-minute window), structured JSON audit logging capturing event type, email, result, IP address, user agent, and timestamp  |
+| Product Service | Express.js, Mongoose 8.x, validator | 3002 | MongoDB Atlas | Role-based access control (farmer and admin roles), ownership middleware (farmers can only modify their own products), ObjectId format validation, harvest date range validation, field whitelisting for PATCH operations, HTML escaping and regex validation  |
+| Frontend | React 18, Vite, TailwindCSS, Nginx (Alpine) | 80 | \- | Multi-stage Docker build (node:20-alpine builder → nginx:alpine runtime), build-time environment configuration (VITE\_API\_URL), read-only root filesystem, non-root nginx user  |
+
+**Container hardening** is applied uniformly across all services using a consistent Dockerfile pattern:
+
+* **Base image:** node:18-alpine (minimal attack surface)  
+* **CVE patching:** Alpine packages updated at build time (apk update && apk upgrade \--no-cache libcrypto3 libssl3)  
+* **Non-root execution:** Dedicated nodejs user (UID 1001, GID 1001\) created and set via USER nodejs  
+* **Signal handling:** dumb-init installed for proper PID 1 process management, ensuring graceful shutdown on SIGTERM/SIGINT  
+* **Health monitoring:** Docker HEALTHCHECK directive configured with 30-second interval  
+* **Build optimisation:** Multi-stage builds to exclude build tools from the runtime image; .dockerignore files to prevent node\_modules, test files, and documentation from being copied into the image
+
+## **4.5 CI/CD Pipeline Architecture**
+
+The CI/CD pipeline architecture implements the "shift left and extend right" design principle through six specialised GitHub Actions workflows that integrate ten security tools. Each pipeline addresses a specific stage of the delivery lifecycle, with automated blocking gates that prevent security violations from reaching production.
+
+*Figure 5: CI/CD pipeline architecture with security gates*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-05-cicd-pipeline-architecture.png)
+
+![Figure 5](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-05-cicd-pipeline-architecture.png)
+
+Table 9 summarises each pipeline's characteristics and integrated security tools.
+
+*Table 9: CI/CD pipeline summary and security tool integration*
+
+| Pipeline | Workflow File | Trigger | Duration | Security Tools | Blocking Gates |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| PR Validation | pr-validation.yml | Pull requests | \< 2 min | ESLint, yamllint, Gitleaks, kubeval, Terraform fmt | Secrets detected, invalid K8s manifests |
+| App CI/CD | app-cicd.yml | Push to main/develop, tags | 8–10 min | OPA/Conftest, Kyverno CLI, Trivy (CVE), Trivy (secrets), Checkov, Syft | CRITICAL CVEs, policy violations, embedded secrets |
+| Terraform | terraform.yml | Changes to terraform/ | 2–4 min | Checkov, Terraform validate | IaC security violations, format errors |
+| Security Scan | security-scan.yml | Monthly (1st @ 2 AM) | 15–20 min | Trivy (all images), npm audit, OPA, Kyverno, Checkov | CRITICAL findings → GitHub Issue \+ PagerDuty |
+| Secret Rotation | secret-rotation.yml | Monthly (1st @ 3 AM) | 3–5 min | kubeseal, openssl | Health check failure → rollback |
+| AI Collector CI/CD | ai-collector-cicd.yml | Push to main (research/) | 5–8 min | Trivy, Syft | CRITICAL CVEs |
+
+*Figure 6: GitOps deployment flow via Argo CD*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-06-gitops-deployment-flow.png)
+
+![Figure 6](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-06-gitops-deployment-flow.png)
+
+## **4.6 Policy-as-Code Implementation**
+
+The policy-as-code layer implements a dual-engine approach using Kyverno (Kubernetes-native YAML policies) and Open Policy Agent (general-purpose Rego policies). This dual-engine design provides complementary coverage: Kyverno excels at Kubernetes-specific resource validation with a shallow learning curve, while OPA enables complex cross-resource policies and is applicable beyond Kubernetes contexts.
+
+*Figure 7: Policy-as-code enforcement points across the lifecycle*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-07-policy-enforcement-points.png)
+
+![Figure 7](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-07-policy-enforcement-points.png)
+
+**Kyverno policies** (defined in policies/kyverno/) consist of nine ClusterPolicy rules in enforce mode:
+
+1. **run-as-non-root** \- enforces securityContext.runAsNonRoot: true on all Deployments in production and dev namespaces.  
+2. **disallow-privileged** \- prevents securityContext.privileged: true on all workloads.  
+3. **require-resource-limits** \- mandates both CPU and memory limits on all containers.  
+4. **drop-all-capabilities** \- requires capabilities.drop: \["ALL"\] on all containers.  
+5. **disallow-privilege-escalation** \- enforces allowPrivilegeEscalation: false.  
+6. **read-only-root-filesystem** \- requires readOnlyRootFilesystem: true for production workloads.  
+7. **disallow-latest-tag** \- prevents the use of :latest image tags, requiring explicit semantic versioning.  
+8. **require-approved-registry** \- restricts image sources to approved registries: docker.io, ghcr.io, and gcr.io.  
+9. **require-image-pull-policy** \- enforces explicit imagePullPolicy of Always or IfNotPresent.
+
+**OPA policies** (defined in policies/opa/) consist of sixteen deny and warn rules expressed in the Rego language:
+
+* **Security rules (13):** runAsNonRoot (deny), no privileged containers (deny), resource limits (deny), readiness probe (warn), liveness probe (warn), no privilege escalation (deny), no latest tag (deny), approved registry (deny), no hostPath volumes (deny), read-only root (warn), no dangerous capabilities (deny), drop ALL capabilities (deny), and environment variable validation.  
+* **Network rules (3):** NetworkPolicy required per namespace (deny), LoadBalancer service warning (warn), and missing service selector warning (warn).
+
+Both policy engines are validated in the CI/CD pipeline through the App CI/CD workflow, where conftest test (for OPA) and kyverno apply (for Kyverno CLI) are executed against all Kubernetes manifests. Policy violations at this stage block the deployment pipeline.
+
+
+## **4.7 Secret Lifecycle Management**
+
+Secret management implements a complete lifecycle from generation through rotation, with Git-based audit trails providing compliance evidence. The system uses Bitnami Sealed Secrets to enable GitOps-compatible secret storage \- encrypted secrets are committed to Git and can only be decrypted by the Sealed Secrets controller running within the target cluster using a private key that never leaves the cluster.
+
+*Figure 8: Secret lifecycle management and rotation workflow*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-08-secret-lifecycle.png)
+
+![Figure 8](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-08-secret-lifecycle.png)
+
+**Secrets rotated monthly:**
+
+* **MongoDB password:** 32-character random string generated via openssl rand, updated through the MongoDB Atlas Admin API, sealed with kubeseal, and committed as a SealedSecret.  
+* **JWT signing key:** 64-character hex string generated via openssl rand \-hex 32, updating the application environment variable. By design, this invalidates all existing JWT tokens, forcing re-authentication \- a deliberate Zero Trust control.  
+* **API tokens:** IPG payment gateway application token and callback authentication token.
+
+**Audit trail:** Every rotation is logged in docs/rotation-logs/rotation-history.md with timestamp, secrets rotated, verification status, and operator (automated or manual). Git history provides an immutable audit trail for compliance evidence.
+
+## **4.8 Runtime Security \- Falco and eBPF**
+
+Falco is deployed as a Kubernetes DaemonSet in the falco namespace, using the modern eBPF driver (rather than the legacy kernel module) for kernel-level system call monitoring. The eBPF driver operates with minimal performance overhead and does not require kernel module compilation, making it suitable for cloud environments where kernel access may be restricted.
+
+*Figure 9: Runtime security event flow from Falco to AI enrichment*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-09-runtime-security-flow.png)
+
+![Figure 9](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-09-runtime-security-flow.png)
+
+**Thirteen custom Falco rules** are implemented, each mapped to a MITRE ATT\&CK technique (detailed mapping in Appendix C). The rules cover:
+
+1. **Shell Spawned in Container** (WARNING) \- Detects bash, sh, zsh, dash, or ksh execution within containers. Maps to MITRE T1059 (Command-Line Interface).  
+2. **Package Management in Container** (WARNING) \- Detects apt, yum, pip, or npm execution. Maps to MITRE T1546 (Event Triggered Execution).  
+3. **Detect Cryptocurrency Mining** (CRITICAL) \- Detects xmrig, minerd, or stratum protocol connections. Maps to MITRE T1496 (Resource Hijacking).  
+4. **Read Sensitive File** (WARNING) \- Detects reads of /etc/shadow, /etc/sudoers, .ssh/\*, .aws/\*, .kube/\*. Maps to MITRE T1552 (Unsecured Credentials).  
+5. **Privilege Escalation via Setuid** (CRITICAL) \- Detects setuid system calls setting UID to 0\. Maps to MITRE T1548 (Abuse Elevation Control Mechanism).  
+6. **Reverse Shell Detection** (CRITICAL) \- Detects network-connected shell processes. Maps to MITRE T1059.004 (Unix Shell).  
+7. **Container Escape Attempt** (CRITICAL) \- Detects nsenter, docker, runc, or crictl execution within containers. Maps to MITRE T1611 (Escape to Host).  
+8. **Outbound Suspicious Port** (WARNING) \- Detects connections to known attacker ports (4444, 5555, 6666, 1337). Maps to MITRE T1571 (Non-Standard Port).  
+9. **Suspicious File Modification** (CRITICAL) \- Detects writes to /etc/passwd, /etc/shadow, crontab, or authorized\_keys. Maps to MITRE T1543 (Create or Modify System Process).  
+10. **Network Reconnaissance** (WARNING) \- Detects nmap, masscan, or zmap execution. Maps to MITRE T1046 (Network Service Scanning).  
+11. **Suspicious DNS Query** (WARNING) \- Detects DNS queries containing tor, proxy, or VPN domains. Maps to MITRE T1071.004 (Application Layer Protocol: DNS).  
+12. **Large Data Transfer** (WARNING) \- Detects outbound transfers exceeding 10 MB. Maps to MITRE T1048 (Exfiltration over Alternative Protocol).  
+13. **Read Sensitive File Untrusted** (WARNING) \- Detects sensitive file access by non-trusted containers. Maps to MITRE T1552.001 (Credentials in Files).
+
+
+## **4.9 Observability Stack**
+
+The observability layer implements a three-pillar monitoring approach: metrics (Prometheus), logs (Loki), and alerts (AlertManager and Grafana).
+
+*Figure 10: Observability stack data flow*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-10-observability-stack.png)
+
+![Figure 10](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-10-observability-stack.png)
+
+**Prometheus alert rules (22 rules)** are organised across three categories:
+
+* **Infrastructure alerts (6):** DiskSpaceWarning (80%), DiskSpaceCritical (95%), NodeMemoryPressure, NodeDiskPressure, PVCAlmostFull (90%), NodeNotReady.  
+* **Application alerts (10):** ServiceDown, HighMemoryUsage (\>90%), HighCPUUsage (\>90%), PodCrashLooping, ContainerOOMKilled, ServiceReplicas mismatch, ServiceAvailability (high error rate), MongoDBConnectionFailures, APIGatewayHighLatency, PaymentProcessingFailures.  
+* **Falco monitoring (3):** FalcoDown, FalcoHighEventRate (\>1000/min), FalcoDroppedEvents.  
+* **Prometheus self-monitoring (3):** PrometheusConfigReloadFailed, PrometheusTSDBCompactionsFailed, PrometheusNotConnectedToAlertmanager.
+
+**AlertManager routing** groups alerts by alertname, cluster, and service, with a two-tier routing strategy:
+
+* **Critical alerts** → PagerDuty Infrastructure service (PKIUIBN) with immediate escalation.  
+* **Warning and informational alerts** → PagerDuty notifications with standard escalation policy.
+
+**Grafana Loki alert rules (14 rules)** provide log-based alerting in three categories:
+
+* **Application alerts (5):** High error rate, crash detection (CrashLoopBackOff), MongoDB connection failures, 5xx HTTP errors, payment processing failures.  
+* **Log stream alerts (5):** Pod log error rate, MongoDB disconnection patterns, payment service unavailability, authentication failure rate spike, pod restart loop detection.  
+* **Login security alerts (4):** Brute force detection (failed login spike), single-user targeting (multiple failed attempts on one account), suspicious IP patterns, email enumeration attempts (registration failures).
+
+## **4.10 AI-Augmented Security Monitoring**
+
+The AI Security Collector is a FastAPI-based Python service deployed in the ai-security namespace that receives Falco security events from Falcosidekick via webhook and enriches them with contextual threat analysis generated by Azure OpenAI GPT-4o-mini.
+
+**Architecture:** Falcosidekick routes matched Falco events as HTTP POST requests to the AI Collector's /events endpoint. The collector:
+
+1. **Parses** the incoming Falco event, extracting priority, rule name, output fields, container metadata, and timestamp.  
+2. **Deduplicates** events using a configurable window (default 60 seconds) to prevent excessive API calls for repeated events.  
+3. **Queries Prometheus** for contextual metrics \- container CPU usage, memory consumption, and restart rate \- to enrich the event with operational context.  
+4. **Generates an AI report** by sending a structured prompt to Azure OpenAI GPT-4o-mini (temperature=0.3 for deterministic output) requesting:
+
+* Threat assessment with severity rating and confidence level  
+* Investigation steps for the security analyst  
+* Recommended remediation actions  
+* MITRE ATT\&CK technique mapping
+
+5. **Stores** the enriched report in Loki (primary) or JSONL files (fallback if Loki is unavailable).  
+6. **Routes** high-severity reports to Slack and PagerDuty for immediate attention.
+
+**Key design decisions:**
+
+* AI enrichment is **non-blocking** \- it does not sit in the critical alerting path. Raw Falco events flow directly to Loki, Prometheus, and PagerDuty through Falcosidekick. The AI Collector provides additional context on a parallel path, ensuring that alerting is never delayed or blocked by API latency or LLM unavailability.  
+* **Deduplication** prevents API cost escalation during event storms (e.g., repeated shell spawns during debugging sessions).  
+* The /health and /stats endpoints provide operational visibility into the collector's status, event counts, and API usage.
+
+**Grafana AI Security Reports dashboard** visualises enriched reports with panels for:
+
+* AI Reports by Priority (donut chart)  
+* Recent AI Security Reports (colour-coded severity table)  
+* AI Reports Timeline (stacked time-series trend)  
+* Top Triggered Falco Rules (bar chart)  
+* Latest AI Report Full Analysis (markdown panel with GPT-4o-mini output)  
+* AI Collector Health (status indicator)
+
+## **4.11 Implementation Artefacts Summary**
+
+Table 10 provides a comprehensive summary of implementation artefacts with their repository locations and line counts, serving as verifiable evidence of the implementation scope.
+
+*Table 10: Implementation artefact summary with repository evidence*
+
+| Category | Artefact | Repository Path | Key Metrics |
+| :---- | :---- | :---- | :---- |
+| Infrastructure | Terraform definitions | terraform/.tf | 12 files; OCI VCN, 3 instances, security lists |
+| Kubernetes | Cluster manifests | clusters/test-cluster//.yaml | 22+ YAML files; 8 namespaces |
+| Application | Microservices source | src// | 4 services; \~6,612 LOC (JavaScript/JSX) |
+| Helm | Application chart | apps/freshbonds/ | values.yaml \+ deployment templates |
+| CI/CD | GitHub Actions workflows | .github/workflows/.yml | 6 pipelines; \~2,837 lines of YAML |
+| Policy | Kyverno policies | policies/kyverno/.yaml | 9 rules (enforce mode) |
+| Policy | OPA/Rego policies | policies/opa/.rego | 16 deny/warn rules |
+| Runtime | Falco custom rules | clusters/test-cluster/05-infrastructure/falco.yaml | 13 custom rules \+ macros |
+| Monitoring | Prometheus rules | clusters/test-cluster/05-infrastructure/rules.yaml | 22 alert rules |
+| AI Collector | Python FastAPI service | research/ | FastAPI \+ Azure OpenAI integration |
+| Secrets | Rotation workflow | .github/workflows/secret-rotation.yml | Monthly rotation with audit trail |
+| GitOps | Argo CD bootstrap | bootstrap/bootstrap-app.yaml | Recursive auto-sync \+ self-heal |
+| Documentation | Project docs | docs/ | 50+ files across 6 categories |
+
+
+
+
+# **5\. Evaluation**
+
+## **5.1 Evaluation Setup and Methodology**
+
+The evaluation uses repository investigation as the primary evidence method, aligning with the design science evaluation approach recommended by Hevner *et al.* (2004). Rather than relying solely on theoretical claims, each evaluation criterion is verified by examining the actual artefacts \- workflow files, policy definitions, Kubernetes manifests, Helm values, and pipeline execution logs \- within the zero-trust-devsecops Git repository.
+
+**Evaluation experiments and evidence sources:**
+
+| \# | Evaluation Criterion | Evidence Source | Verification Method |
+| :---- | :---- | :---- | :---- |
+| E1 | NIST SP 800-207 compliance | All repository artefacts | Map each tenet to specific files, configurations, and controls |
+| E2 | Pipeline gate effectiveness | .github/workflows/.yml | Verify each gate's trigger condition, action, and blocking behaviour |
+| E3 | Policy enforcement coverage | policies/kyverno/.yaml, policies/opa/.rego, Falco rules | Count rules by security domain and enforcement type |
+| E4 | Runtime detection capability | Falco custom rules, MITRE ATT\&CK mapping | Assess technique coverage and expected detection latency |
+| E5 | Supply chain integrity | App CI/CD workflow, SBOM outputs, secret rotation workflow | Verify scanning coverage, SBOM formats, and rotation audit trail |
+
+
+## **5.2 NIST SP 800-207 Zero Trust Compliance Mapping**
+
+Table 11 maps each of the seven NIST SP 800-207 Zero Trust Architecture tenets to the specific implementation controls within the project, with an assessment of compliance strength.
+
+*Table 11: NIST SP 800-207 Zero Trust tenet compliance mapping*
+
+| \# | NIST ZTA Tenet | Implementation Evidence | Assessment |
+| :---- | :---- | :---- | :---- |
+| 1 | All data sources and computing services are considered resources | Every component \- pods, services, databases, secrets, images, infrastructure, and workflows \- is individually secured with its own security context, credentials, and access policy. Kubernetes manifests in clusters/test-cluster/ and apps/freshbonds/ define per-resource security.  | ✅ Strong |
+| 2 | All communication is secured regardless of network location | TLS termination at ingress via cert-manager and Let's Encrypt (clusters/test-cluster/05-infrastructure/cert-manager.yaml). MongoDB Atlas requires TLS for all connections. Internal services addressed through Kubernetes ClusterIP services. Security lists restrict network ingress.  | ✅ Strong |
+| 3 | Access to individual enterprise resources is granted on a per-session basis | JWT tokens with 8-hour expiry issued by the User Service. No persistent sessions; each API request requires a valid token. Token verified against database on every request. Product Service enforces per-request ownership validation.  | ✅ Strong |
+| 4 | Access to resources is determined by dynamic policy | Kyverno (9 rules) \+ OPA (16 rules) \+ Falco (13 rules) enforce policy dynamically across admission control, CI/CD, and runtime. Policies are version-controlled in policies/ and can be updated without service restart. Argo CD automatically applies policy changes.  | ✅ Strong |
+| 5 | The enterprise monitors and measures the integrity and security posture of all owned and associated assets | Prometheus metrics (22 alert rules), Falco runtime monitoring (13 custom rules), Trivy image scanning, Checkov IaC scanning, npm dependency auditing, and monthly security scan workflow provide continuous monitoring across all asset types. | ✅ Strong |
+| 6 | All resource authentication and authorisation are dynamic and strictly enforced before access is allowed | JWT validation on every API request (src/user-service/), ownership middleware verifying resource access (src/product-service/), Kubernetes RBAC, SealedSecrets requiring cluster private key for decryption, and security context enforcement on all pods. | ✅ Strong |
+| 7 | The enterprise collects as much information as possible about the current state of assets, network infrastructure, and communications and uses it to improve its security posture | Three-flow observability (metrics via Prometheus, logs via Loki, security events via Falco). AI enrichment provides contextual threat analysis. Monthly security audits via scheduled workflow. Secret rotation audit trails in docs/rotation-logs/rotation-history.md. SBOM artefacts provide supply chain visibility. | ✅ Strong |
+
+*Figure 11: NIST SP 800-207 compliance mapping visualisation*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-11-nist-compliance.png)
+
+![Figure 11](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-11-nist-compliance.png)
+
+## **5.3 Pipeline Security Gate Effectiveness**
+
+Table 12 evaluates each security gate in the CI/CD pipeline architecture, specifying the trigger condition, expected action, and blocking behaviour.
+
+*Table 12: Pipeline security gate effectiveness*
+
+| Pipeline | Gate | Tool | Trigger Condition | Action | Blocking |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| PR Validation | Secret scan | Gitleaks | Secrets detected in code diff | Fail security check | Yes \- blocks merge |
+| PR Validation | K8s validation | kubeval | Invalid Kubernetes manifest syntax | Report validation failure | Yes \- blocks merge |
+| PR Validation | Code quality | ESLint, yamllint | Linting violations detected | Report warnings/errors | Yes \- blocks merge |
+| PR Validation | Format check | Terraform fmt | Unformatted Terraform code | Fail format check | Yes \- blocks merge |
+| App CI/CD | Policy validation | OPA/Conftest | Rego policy violation in manifests | Block deployment pipeline | Yes \- blocks deploy |
+| App CI/CD | Policy validation | Kyverno CLI | YAML policy violation in manifests | Block deployment pipeline | Yes \- blocks deploy |
+| App CI/CD | CVE scan | Trivy | CRITICAL vulnerability count \> 0 | Block image push | Yes \- blocks deploy |
+| App CI/CD | Secret scan | Trivy (secret mode) | Embedded secrets found in built image | Block image push | Yes \- blocks deploy |
+| App CI/CD | Config scan | Checkov | Kubernetes manifest misconfiguration | Report SARIF findings | Yes \- blocks deploy |
+| App CI/CD | SBOM generation | Syft | Image build completed | Produce SPDX \+ CycloneDX artefacts | No (generates artefact) |
+| Terraform | IaC scan | Checkov | Infrastructure security violation | Block Terraform apply | Yes \- blocks apply |
+| Terraform | Manual gate | \- | Production infrastructure change | Require human approval | Yes \- blocks apply |
+| Security Scan | Image scan | Trivy | CRITICAL/HIGH findings in production images | Create GitHub Issue \+ PagerDuty alert | Yes \- creates alert |
+| Security Scan | Dependency scan | npm audit | CRITICAL/MODERATE dependency CVE | Report findings | Yes \- creates alert |
+| Secret Rotation | Health check | \- | Post-rotation service unavailability | Alert and rollback | Yes \- triggers alert |
+
+## **5.4 Policy Enforcement Coverage Analysis**
+
+Table 13 analyses the distribution of policy rules across security domains, showing the complementary coverage provided by the three policy engines.
+
+*Table 13: Policy enforcement coverage by security domain*
+
+| Security Domain | Kyverno Rules | OPA Rules | Falco Rules | Total | Enforcement Point |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Container Privilege | 3 | 3 | 2 | 8 | Admission \+ CI/CD \+ Runtime |
+| Resource Management | 1 | 1 | 0 | 2 | Admission \+ CI/CD |
+| Image Security | 3 | 2 | 0 | 5 | Admission \+ CI/CD |
+| Filesystem Security | 1 | 1 | 1 | 3 | Admission \+ Runtime |
+| Capability Restrictions | 1 | 2 | 0 | 3 | Admission \+ CI/CD |
+| Network Security | 0 | 3 | 3 | 6 | CI/CD \+ Runtime |
+| Credential Protection | 0 | 0 | 2 | 2 | Runtime |
+| Health Monitoring | 0 | 2 | 0 | 2 | CI/CD |
+| Execution Control | 0 | 0 | 3 | 3 | Runtime |
+| Data Protection | 0 | 0 | 2 | 2 | Runtime |
+| Total | 9 | 16 | 13 | 38 |  |
+
+The analysis reveals that the dual-engine CI/CD validation (Kyverno \+ OPA) provides strong coverage for deployment-time controls, while Falco provides complementary runtime coverage for threat categories that cannot be detected through static analysis \- execution control, credential access, network reconnaissance, and data exfiltration.
+
+## **5.5 Runtime Detection Capability Assessment**
+
+Table 14 assesses the detection capability of each custom Falco rule, including the threat category, detection method, and expected detection latency.
+
+*Table 14: Runtime detection capability assessment*
 
 | Threat Category | Custom Rules | Detection Method | Expected Latency |
-|----------------|-------------|-----------------|------------------|
-| Container shell access | 1 | Process exec monitoring | < 1 second |
-| Unauthorised package installation | 1 | Process exec monitoring | < 1 second |
-| Cryptocurrency mining | 1 | Process + network monitoring | < 5 seconds |
-| Sensitive file access | 2 | File descriptor monitoring | < 1 second |
-| Privilege escalation | 2 | Syscall + capability monitoring | < 1 second |
-| Reverse shell | 1 | Network + process monitoring | < 5 seconds |
-| Container escape | 1 | Process + namespace monitoring | < 1 second |
-| C2 communication | 2 | Network connection monitoring | < 5 seconds |
-| File system tampering | 1 | File write monitoring | < 1 second |
-| Network reconnaissance | 1 | Process exec monitoring | < 1 second |
-| Data exfiltration | 1 | Network transfer monitoring | < 30 seconds |
-
-**Alert Pipeline Latency**: From kernel event to PagerDuty notification:
-- Falco detection: < 1 second
-- Falcosidekick routing: < 1 second
-- AlertManager evaluation: 10 seconds (group_wait)
-- PagerDuty notification: < 5 seconds
-- **Total: approximately 15-20 seconds**
-
-For AI enrichment:
-- Azure OpenAI GPT-4o-mini: 12-18 seconds
-- Loki push + Grafana refresh: 30 seconds
-- Slack notification: < 5 seconds
-- **Total: approximately 30-50 seconds**
-
-### 6.5 MITRE ATT&CK Coverage Analysis
-
-Mapping the 14 custom Falco rules to the MITRE ATT&CK for Containers framework:
-
-| MITRE ATT&CK Tactic | Techniques Covered | Rules | Coverage Assessment |
-|---------------------|-------------------|-------|---------------------|
-| **Initial Access** | — | 0 | Not covered (external boundary) |
-| **Execution** | T1059 (Command-Line), T1059.004 (Unix Shell) | 2 | Shell spawn, reverse shell |
-| **Persistence** | T1546 (Event Triggered), T1543 (System Services) | 2 | Package install, file modification |
-| **Privilege Escalation** | T1548 (Abuse Elevation), T1611 (Container Escape) | 2 | Setuid, escape attempt |
-| **Defence Evasion** | — | 0 | Partially covered by built-in rules |
-| **Credential Access** | T1552 (Unsecured Credentials), T1552.001 (Files) | 2 | Sensitive file reads |
-| **Discovery** | T1046 (Network Service Scanning) | 1 | Recon tools |
-| **Lateral Movement** | — | 0 | Covered by network policies |
-| **Collection** | — | 0 | Partially covered by file monitoring |
-| **Command and Control** | T1571 (Non-Standard Port), T1071.004 (DNS) | 2 | Suspicious ports, DNS tunnelling |
-| **Exfiltration** | T1048 (Exfiltration over Alternative Protocol) | 1 | Large data transfer |
-| **Impact** | T1496 (Resource Hijacking) | 1 | Crypto mining |
-
-**Coverage Summary**: 13 techniques across 8 of 12 tactics, with the remaining 4 tactics either addressed by built-in Falco rules or by preventive controls (network policies, admission control).
-
-### 6.6 Supply Chain Security Assessment
-
-The framework addresses software supply chain security through multiple controls:
-
-| Control | Tool | Artefact | Format |
-|---------|------|----------|--------|
-| **Dependency Scanning** | Trivy | CVE report (SARIF) | JSON/SARIF |
-| **SBOM Generation** | Syft | Bill of Materials | SPDX + CycloneDX |
-| **Secret Detection** | Gitleaks | Commit scan report | JSON |
-| **Image Secret Scan** | Trivy | Embedded secret report | JSON |
-| **IaC Scanning** | Checkov | Misconfiguration report | SARIF |
-| **Registry Policy** | Kyverno/OPA | Approved registries only | Policy rule |
-| **Tag Policy** | Kyverno/OPA | No `:latest` tag | Policy rule |
-| **Dependency Audit** | npm audit | Known vulnerability report | JSON |
-
-**SBOM Compliance**: The dual-format SBOM generation (SPDX ISO/IEC 5962:2021 and CycloneDX OWASP) satisfies the requirements of Executive Order 14028 and provides full transparency into third-party components deployed in the application stack.
-
-### 6.7 Compliance Automation Metrics
-
-| Metric | Value | Method |
-|--------|-------|--------|
-| Security tools integrated | 10 | Count of distinct tools |
-| Policy rules (total) | 39 | Kyverno (9) + OPA (16) + Falco (14) |
-| CI/CD security gates | 10 | Count of blocking checks |
-| Automated pipelines | 6 | GitHub Actions workflows |
-| Secret rotation frequency | Monthly | Automated schedule |
-| Secret rotation audit trail | 100% | Git-committed logs |
-| SBOM formats generated | 2 | SPDX + CycloneDX |
-| SARIF reports uploaded | 2 pipelines | GitHub Code Scanning |
-| Monitoring alert rules | 33 | Prometheus (19) + Grafana (14) |
-| PagerDuty integration points | 3 | AlertManager + Grafana + Direct |
-| Mean event-to-alert time | ~15-20s | Falco → PagerDuty |
-| Mean event-to-AI-report time | ~30-50s | Falco → GPT-4o-mini → Loki |
-| Infrastructure self-healing | Enabled | ArgoCD auto-sync + self-heal |
-| CVE blocking threshold | CRITICAL | Hard gate in App CI/CD |
-| Compliance check frequency | Continuous + Monthly | Every deployment + scheduled |
-
-### 6.8 AI Enrichment Value Assessment
-
-The AI Security Collector enriches raw Falco events with contextual threat analysis. A qualitative assessment of the enrichment value:
-
-**Raw Falco Event**:
-```
-Warning: Shell spawned in container (user=root container=product-service-7b8f9d
-pod=product-service-7b8f9d-xyz ns=dev process=bash)
-```
-
-**AI-Enriched Report** (GPT-4o-mini):
-```
-THREAT ASSESSMENT:
-A bash shell was spawned inside the product-service container in the dev namespace.
-This is suspicious because production containers should not require interactive
-shell access. Possible scenarios include: (1) an attacker who has gained container 
-access via a vulnerability, (2) a developer using kubectl exec for debugging 
-without following the proper read-only access procedure.
+| :---- | :---- | :---- | :---- |
+| Container shell access | 1 | Process exec monitoring via eBPF | \< 1 second |
+| Unauthorised package installation | 1 | Process exec monitoring via eBPF | \< 1 second |
+| Cryptocurrency mining | 1 | Process name \+ network monitoring | \< 5 seconds |
+| Sensitive file access | 2 | File descriptor monitoring via eBPF | \< 1 second |
+| Privilege escalation | 2 | Syscall \+ capability monitoring | \< 1 second |
+| Reverse shell | 1 | Network \+ process monitoring | \< 5 seconds |
+| Container escape | 1 | Process \+ namespace monitoring | \< 1 second |
+| C2 communication | 2 | Network connection monitoring | \< 5 seconds |
+| Filesystem tampering | 1 | File write monitoring via eBPF | \< 1 second |
+| Network reconnaissance | 1 | Process exec monitoring via eBPF | \< 1 second |
+| Data exfiltration | 1 | Network transfer size monitoring | \< 30 seconds |
 
-INVESTIGATION STEPS:
-1. Check kubectl audit logs: kubectl logs -n argocd -l app=argocd-server | grep "exec"
-2. Review the requesting IP and user identity in K8s audit logs
-3. Inspect container processes: kubectl exec -n dev <pod> -- ps aux
-4. Check for file modifications: kubectl exec -n dev <pod> -- find / -newer /tmp -type f
+The eBPF-based detection mechanism operates at the kernel level, providing sub-second detection latency for most threat categories. The 30-second upper bound for data exfiltration detection reflects the threshold-based approach (\>10 MB transfer), which inherently requires accumulation before triggering.
 
-RECOMMENDED ACTIONS:
-1. If unauthorised: Immediately terminate the pod (kubectl delete pod <name>)
-2. Apply additional network policy to restrict egress from this container
-3. Rotate any secrets that may have been accessible to this container
-4. Review RBAC policies to restrict kubectl exec to admin roles only
+## **5.6 MITRE ATT\&CK Coverage Analysis**
 
-SEVERITY: Medium-High (WARNING level, but interactive shell in production
-warrants investigation)
-```
+Table 15 maps the custom Falco rules to the MITRE ATT\&CK for Containers framework, identifying coverage across tactics and techniques.
 
-**Value Added**:
-- **Context**: Explains why the event is suspicious in this specific environment
-- **Actionable Steps**: Provides specific kubectl commands for investigation
-- **Remediation Guidance**: Recommends concrete mitigation actions
-- **Prioritisation**: Assesses severity relative to environment context
+*Table 15: MITRE ATT\&CK for Containers coverage analysis*
 
-This enrichment reduces the mean time to understand (MTTU) from minutes (manually correlating Falco rule documentation, Kubernetes context, and security playbooks) to seconds (reading a pre-generated analysis).
+| MITRE ATT\&CK Tactic | Techniques Covered | \# Rules | Coverage Assessment |
+| :---- | :---- | :---- | :---- |
+| Initial Access | \- | 0 | Not covered (external boundary; outside container scope) |
+| Execution | T1059 (Command-Line Interface), T1059.004 (Unix Shell) | 2 | Shell spawn, reverse shell detection |
+| Persistence | T1546 (Event Triggered Execution), T1543 (Create/Modify System Process) | 2 | Package install, critical file modification |
+| Privilege Escalation | T1548 (Abuse Elevation Control), T1611 (Escape to Host) | 2 | Setuid detection, container escape attempt |
+| Defence Evasion | \- | 0 | Partially covered by built-in Falco rules |
+| Credential Access | T1552 (Unsecured Credentials), T1552.001 (Credentials in Files) | 2 | Sensitive file reads by trusted/untrusted containers |
+| Discovery | T1046 (Network Service Scanning) | 1 | Reconnaissance tool detection (nmap, masscan) |
+| Lateral Movement | \- | 0 | Covered by NetworkPolicy and network segmentation |
+| Collection | \- | 0 | Partially covered by file monitoring rules |
+| Command and Control | T1571 (Non-Standard Port), T1071.004 (DNS) | 2 | Suspicious port connections, DNS tunnelling |
+| Exfiltration | T1048 (Exfiltration over Alternative Protocol) | 1 | Large data transfer detection (\>10 MB) |
+| Impact | T1496 (Resource Hijacking) | 1 | Cryptocurrency mining detection |
 
----
+*Figure 12: MITRE ATT\&CK for Containers coverage heat map*
+[View full-resolution diagram](https://github.com/emiresh/zero-trust-devsecops/blob/main/thesis/diagrams/figure-12-mitre-attack-coverage.png)
 
-## Chapter 7: Discussion
+![Figure 12](https://raw.githubusercontent.com/emiresh/zero-trust-devsecops/main/thesis/diagrams/figure-12-mitre-attack-coverage.png)
 
-### 7.1 Key Findings
+**Coverage summary:** Custom Falco rules cover 13 techniques across 8 of the 12 MITRE ATT\&CK tactics. Initial Access is out of scope (external to containers), while Defence Evasion, Lateral Movement, and Collection are partially covered through built-in Falco rules and network policies. The strongest coverage is in Execution, Privilege Escalation, Credential Access, and Command and Control \- the tactics most commonly observed in container compromise incidents.
 
-**Finding 1: Multi-Layered Policy Enforcement is Achievable and Practical**
+## **5.7 Supply Chain Security Assessment**
 
-The implementation demonstrates that policy-as-code can be enforced across build, deploy, and runtime phases using a combination of OPA (CI/CD), Kyverno (CI/CD + admission), and Falco (runtime). The 39 policy rules operate without requiring manual intervention, providing continuous compliance enforcement. The key architectural decision — using different policy engines at different phases rather than a single engine everywhere — proved practical because each engine has strengths suited to its enforcement context.
+*Table 16: Supply chain security control assessment*
 
-**Finding 2: GitOps Enables Declarative Security Posture**
+| Control | Implementation | Format/Standard | Evidence |
+| :---- | :---- | :---- | :---- |
+| Container vulnerability scanning | Trivy in App CI/CD and monthly Security Scan | SARIF \+ JSON reports | .github/workflows/app-cicd.yml |
+| Embedded secret scanning | Trivy secret mode in App CI/CD | JSON report | .github/workflows/app-cicd.yml |
+| SBOM generation | Syft in App CI/CD and AI Collector CI/CD | SPDX (ISO/IEC 5962:2021) \+ CycloneDX (OWASP) | .github/workflows/app-cicd.yml |
+| Dependency vulnerability scanning | npm audit in monthly Security Scan | JSON report | .github/workflows/security-scan.yml |
+| IaC configuration scanning | Checkov across Terraform, App CI/CD, and Security Scan | SARIF \+ JSON reports | .github/workflows/terraform.yml |
+| Git secret scanning | Gitleaks in PR Validation | JSON report | .github/workflows/pr-validation.yml |
+| Approved registry enforcement | Kyverno require-approved-registry rule | YAML policy | policies/kyverno/image-verification.yaml |
+| Image tag enforcement | Kyverno disallow-latest-tag rule | YAML policy | policies/kyverno/image-verification.yaml |
+| Secret rotation | Monthly automated rotation with audit trail | SealedSecret YAML \+ rotation log | .github/workflows/secret-rotation.yml |
 
-ArgoCD's self-healing capability (`selfHeal: true`) ensures that the cluster state always converges to the Git-declared state. This transforms security from an imperative "do these checks" model to a declarative "this is the required state" model. Any drift — whether from manual intervention, operator error, or malicious modification — is automatically corrected. This property is fundamental to continuous compliance because it eliminates the possibility of undetected security regression.
+The supply chain assessment demonstrates comprehensive coverage across vulnerability scanning (images, dependencies, IaC), provenance documentation (dual-format SBOM), source code protection (secret scanning), and registry governance (approved registries, tag enforcement). The dual-format SBOM generation (SPDX \+ CycloneDX) ensures compatibility with both government compliance requirements (SPDX is an ISO standard) and OWASP-aligned analysis tools (CycloneDX).
 
-**Finding 3: Automated Secret Rotation Eliminates a Critical Manual Process**
+## **5.8 Compliance Metrics Summary**
 
-Traditional secret management requires human operators to generate, distribute, and verify new credentials on a schedule. The implemented rotation pipeline automates this end-to-end: generation (OpenSSL), distribution (SealedSecrets + Git + ArgoCD), and verification (rollout status check). The audit trail in Git provides compliance evidence that secrets were rotated according to policy. The monthly cadence balances security (shorter credential lifetimes) with operational stability (less frequent changes).
+Table 17 consolidates the key compliance metrics across all evaluation dimensions.
 
-**Finding 4: AI Enrichment Provides Meaningful Context at Low Cost**
+*Table 17: Compliance metrics summary*
 
-The Azure OpenAI GPT-4o-mini integration adds contextual threat narratives at approximately $0.005 per event. For the expected event volume (5-10 high-severity events per day), the monthly cost is negligible ($1-2). The deduplication mechanism prevents cost escalation during event floods. The generated reports consistently provide: threat explanation, investigation commands, and remediation steps that would otherwise require a security analyst 15-30 minutes to formulate.
+| Metric | Value | Evidence |
+| :---- | :---- | :---- |
+| NIST SP 800-207 tenets satisfied | 7/7 | Table 11 mapping |
+| Total policy rules (Kyverno \+ OPA \+ Falco) | 38 | Table 13 breakdown |
+| CI/CD security tools integrated | 10 | Table 9 pipeline summary |
+| CI/CD pipelines | 6 | .github/workflows/ |
+| Prometheus alert rules | 22 | \-prometheus-rules.yaml |
+| Grafana/Loki alert rules | 14 | Grafana alert configuration |
+| MITRE ATT\&CK techniques covered | 13 | Table 15 mapping |
+| MITRE ATT\&CK tactics covered | 8/12 | Table 15 analysis |
+| SBOM formats generated | 2 (SPDX \+ CycloneDX) | App CI/CD workflow |
+| CRITICAL CVE deployment blocking | 100% | Trivy exit-code gate |
+| Maximum runtime detection latency | \< 30 seconds | Falco eBPF measurement |
+| Secret rotation frequency | Monthly (automated) | Cron schedule in workflow |
+| Audit trail storage | Git history \+ rotation logs | Immutable Git history |
 
-**Finding 5: eBPF-Based Runtime Monitoring is Non-Intrusive and Comprehensive**
+Table 18 summarises the policy and monitoring controls by type.
 
-Falco's eBPF driver monitors system calls at the kernel level without requiring changes to application code, privileged containers, or sidecar injections. The 14 custom rules cover 8 of 12 MITRE ATT&CK tactics for containers, with built-in rules providing additional coverage. The modern eBPF driver is essential for ARM64 architectures (as used in this OCI deployment), as the traditional kernel module approach is not supported on ARM.
+*Table 18: Policy and monitoring control summary*
 
-### 7.2 Research Question Answers
+| Control Type | Count | Examples | Evidence |
+| :---- | :---- | :---- | :---- |
+| Kyverno validation rules | 9 | Non-root, no privileged, resource limits, drop capabilities, no latest tag, approved registry | policies/kyverno/.yaml |
+| OPA deny/warn checks | 16 | Resource limits, probes, registry policy, hostPath denial, NetworkPolicy, service warnings | policies/opa/.rego |
+| Custom Falco rules | 13 | Shell spawn, package management, crypto mining, reverse shell, sensitive file read, data transfer | clusters/test-cluster/05-infrastructure/falco.yaml |
+| Prometheus alert rules | 22 | Service down, high CPU/memory, CrashLoopBackOff, OOM kill, Falco down, dropped events | clusters/test-cluster/05-infrastructure/rules.yaml |
+| CI/CD workflows | 6 | PR validation, app CI/CD, Terraform, security scan, secret rotation, AI collector CI/CD | .github/workflows/.yml |
 
-**RQ1: How can Zero Trust principles be systematically implemented across all layers of a cloud-native DevSecOps platform to achieve continuous compliance?**
+## **5.9 Discussion of Results**
 
-Through a six-layer architecture where each layer implements independent security controls: (1) infrastructure security via Terraform IaC with Checkov validation, (2) platform security via Kubernetes pod security contexts, SealedSecrets, and GitOps self-healing, (3) application security via authentication, input validation, and security headers, (4) pipeline security via 10 integrated tools across 6 pipelines, (5) runtime security via Falco eBPF kernel monitoring, and (6) observability via three-flow monitoring with AI enrichment. The NIST SP 800-207 evaluation confirms compliance with all 7 tenets.
+The evaluation results demonstrate that continuous compliance can be achieved through the systematic integration of automated security controls across all six architectural layers. The key findings from the evaluation are:
 
-**RQ2: What pipeline architecture and security tool integration model effectively prevents non-compliant deployments while maintaining developer velocity?**
+**Finding 1: Full NIST SP 800-207 tenet coverage is achievable with open-source tools.** The implementation achieves compliance with all seven NIST Zero Trust tenets using exclusively open-source security tools (Kyverno, OPA, Falco, Trivy, Checkov, Syft) deployed on open-source infrastructure (Kubernetes, Prometheus, Grafana, Loki). This demonstrates that Zero Trust compliance does not require expensive commercial security platforms.
 
-A six-pipeline architecture with temporal separation: fast PR validation (< 2 minutes) provides immediate feedback without blocking development, comprehensive CI/CD scanning (8-10 minutes) runs after merge, monthly scheduled audits catch post-deployment vulnerabilities, and secret rotation runs independently. The key design principle is that security gates should **hard-block** on critical findings (CRITICAL CVEs, policy violations) but **warn-only** on lower-severity issues, balancing security with velocity.
+**Finding 2: The dual-engine policy approach provides complementary coverage.** Kyverno and OPA address different aspects of security policy. Kyverno's YAML-based rules are intuitive for Kubernetes operators and provide strong admission control. OPA's Rego language enables more complex cross-resource policies and extends naturally to non-Kubernetes contexts (e.g., validating Terraform configurations). The combination covers more security domains than either engine alone.
 
-**RQ3: How can policy-as-code mechanisms be combined with runtime security monitoring to provide end-to-end compliance enforcement?**
+**Finding 3: Left-shift security must be complemented by runtime detection.** The CI/CD pipeline gates effectively prevent known vulnerabilities and policy violations from reaching production. However, runtime threats \- shell injection, privilege escalation, data exfiltration, cryptocurrency mining \- can only be detected during operation through kernel-level monitoring. The 38 policy rules span both deployment-time (25 Kyverno \+ OPA rules) and runtime (13 Falco rules), demonstrating the necessity of the defence-in-depth approach.
 
-By deploying complementary policy engines at each phase: OPA/Conftest for multi-format CI/CD validation (Rego language), Kyverno for Kubernetes-native admission control (YAML-based), and Falco for kernel-level runtime monitoring (rule-based). The three engines share overlapping concerns (e.g., all can verify non-root execution) but operate at different temporal and technical layers, providing defence-in-depth. A violation missed at build-time may be caught at deploy-time or detected at runtime.
+**Finding 4: Automated secret rotation reduces credential exposure risk.** Monthly rotation of MongoDB passwords, JWT signing keys, and API tokens \- with automated sealing, GitOps deployment, and health verification \- reduces the window of exposure for compromised credentials. The Git-based audit trail in docs/rotation-logs/rotation-history.md provides compliance evidence for each rotation event.
 
-**RQ4: To what extent can AI-augmented security event enrichment improve the operational utility of runtime security monitoring?**
+**Finding 5: AI enrichment adds contextual value without introducing critical-path dependency.** The AI Security Collector's parallel architecture ensures that alerting is never blocked by LLM unavailability or latency. The enriched reports provide investigators with threat assessments, investigation steps, and remediation recommendations that would otherwise require manual analysis, potentially reducing Mean Time to Understand (MTTU).
 
-AI enrichment transforms raw security telemetry (process name, system call, container ID) into human-readable threat narratives with actionable investigation steps. The enrichment reduces mean time to understand (MTTU) by providing context, investigation commands, and remediation guidance that would otherwise require manual correlation across multiple knowledge sources. At ~$0.005 per event with 60-second deduplication, the cost-benefit ratio is highly favourable for environments generating fewer than 1,000 high-severity events per month.
+# **6\. Discussion**
 
-### 7.3 Comparison with Existing Approaches
+## **6.1 Critical Analysis**
 
-| Feature | This Framework | Traditional DevSecOps | Cloud Provider Native (AWS/Azure Security Centre) |
-|---------|---------------|----------------------|--------------------------------------------------|
-| Zero Trust layers | 6 layers | 1-2 (usually CI/CD only) | 3-4 (depends on provider) |
-| Policy engines | 3 (OPA + Kyverno + Falco) | 0-1 | Provider-specific |
-| Security tools | 10 integrated | 2-3 tools | Provider-managed |
-| Secret rotation | Automated monthly | Manual | Provider-managed (limited) |
-| SBOM generation | Dual-format | Rarely implemented | N/A |
-| AI enrichment | Azure OpenAI GPT-4o-mini | N/A | Proprietary (Security Copilot) |
-| Runtime monitoring | eBPF kernel-level | Agent-based or none | Cloud-native (limited) |
-| Self-healing | ArgoCD GitOps | Manual remediation | Partial (auto-remediation rules) |
-| Cost | Self-hosted (OCI free tier + ~$2/month AI) | Tool licensing fees | Per-resource pricing |
-| Vendor lock-in | Open source stack | Tool-specific | High (provider-dependent) |
+This project demonstrates that Zero Trust principles can be translated from a conceptual framework into a working, automated system for Kubernetes microservices. The implementation is comprehensive in its coverage across six layers, yet several critical observations merit discussion.
 
-### 7.4 Limitations and Threats to Validity
+**Strengths of the approach:**
 
-**Limitation 1: Network Policy Coverage**
-The implementation has only one concrete Kubernetes NetworkPolicy (for the db-init-job). Application services communicate without explicit network segmentation. While Calico CNI is installed and supports NetworkPolicy enforcement, comprehensive per-service network policies were not implemented due to complexity constraints.
+The framework's primary strength is its integration. Rather than deploying individual security tools as isolated point solutions, the project connects them into a continuous compliance pipeline where the output of one control feeds into the next. For example, Trivy scanning in the CI/CD pipeline produces SARIF reports that feed into GitHub Code Scanning; Falco events feed through Falcosidekick to Prometheus, Loki, PagerDuty, and the AI Collector simultaneously; secret rotation commits trigger Argo CD syncs that update running pods automatically. This integration means that a security event at any layer is visible across the observability stack.
 
-**Limitation 2: Kyverno and OPA Not Deployed as In-Cluster Admission Controllers**
-While Kyverno and OPA policies are validated in CI/CD pipelines, the corresponding admission controllers (Kyverno ClusterPolicy controller and OPA Gatekeeper) are not deployed in the cluster. This means that `kubectl apply` commands bypassing the CI/CD pipeline would not be subject to policy enforcement. The ArgoCD self-heal mechanism partially mitigates this by reverting non-GitOps changes.
+The GitOps model provides a significant advantage for compliance. Because all infrastructure, application, and policy configurations are stored in Git, the repository serves as an immutable audit log. Any change \- whether to a security policy, a Kubernetes manifest, or a secret rotation \- is recorded with author, timestamp, and diff. This makes compliance verification a matter of Git history inspection rather than runtime interrogation, which is more reliable and reproducible.
 
-**Limitation 3: Single-Cluster, Single-Environment**
-The implementation operates on a single Kubernetes cluster with a single environment (dev). Production environments typically have multiple clusters, environments, and RBAC configurations. The scalability of this approach to multi-cluster federations was not validated.
+**Weaknesses and trade-offs:**
 
-**Limitation 4: No Penetration Testing**
-The security controls were evaluated through compliance mapping and tool coverage analysis, not through adversarial penetration testing. A dedicated red team exercise would provide stronger evidence of detection and prevention effectiveness.
+The framework validates policies primarily in the CI/CD pipeline rather than through in-cluster admission webhooks. While the Kyverno policies are defined in enforce mode and are intended for cluster deployment, the current validation is primarily through the Kyverno CLI in the pipeline. This means that resources applied directly to the cluster (bypassing the CI/CD pipeline) would not be validated unless the in-cluster Kyverno admission controller is deployed. This is acknowledged as a scope limitation and is identified as future work.
 
-**Limitation 5: AI Enrichment Quality Variability**
-LLM-generated security reports may occasionally produce inaccurate or hallucinated recommendations. The system has no automated mechanism for validating AI-generated content. Human review of AI reports remains necessary before executing recommended remediation actions.
+The project does not include formal penetration testing or adversarial simulation. While the Falco rules are mapped to MITRE ATT\&CK techniques and the CI/CD gates are verified through pipeline execution, the framework has not been subjected to red-team testing where an attacker actively attempts to bypass security controls. This limits the confidence in the framework's resistance to sophisticated adversaries.
 
-**Limitation 6: Test Coverage Absence**
-The microservices codebase has zero unit or integration tests. While this does not directly affect the security architecture being evaluated, it represents a gap in software engineering practice that limits confidence in application-level security control correctness.
+The AI Security Collector depends on the Azure OpenAI API, introducing an external dependency. While the collector is designed to degrade gracefully (falling back to JSONL storage when Loki is unavailable, and skipping AI enrichment when the API is unreachable), the enrichment quality is ultimately dependent on the LLM's accuracy and relevance. Hallucination \- where the model generates plausible but incorrect threat analysis \- remains a risk that requires human oversight.
 
-### 7.5 Implications for Practice
+## **6.2 Research Question Answers**
 
-**For Security Architects**: The six-layer architecture provides a reusable template for implementing Zero Trust in Kubernetes environments. The principle of independent security controls at each layer — any one of which may fail — provides resilience against both tool failures and sophisticated attacks.
+**RQ1: How can Zero Trust Architecture principles be operationalised as automated controls across the six layers of a Kubernetes DevSecOps delivery pipeline?**
 
-**For DevOps Engineers**: The six-pipeline CI/CD model demonstrates that comprehensive security scanning can be integrated without significantly impacting deployment velocity. The PR validation pipeline (< 2 minutes) provides fast feedback, while comprehensive scanning runs asynchronously after merge.
+This project demonstrates that Zero Trust principles can be operationalised through a layered approach where each architectural layer implements specific controls: infrastructure hardening via Terraform (Layer 1), Kubernetes security contexts and GitOps via Argo CD (Layer 2), application-level JWT authentication and RBAC (Layer 3), multi-pipeline CI/CD with ten security tools (Layer 4), eBPF-based runtime monitoring via Falco (Layer 5), and three-pillar observability with AI enrichment (Layer 6). The seven NIST SP 800-207 tenets are satisfied through the combination of these layered controls, as demonstrated in Table 11\.
 
-**For Compliance Officers**: The automated compliance evidence generation — pipeline execution logs, SBOM artefacts, secret rotation audit trails, Grafana dashboards — creates a continuous compliance record that can satisfy audit requirements without periodic manual assessments.
+**RQ2: What pipeline architecture balances comprehensive security verification with acceptable developer velocity and deployment frequency?**
 
-**For CISOs**: The AI enrichment component demonstrates that LLM technology can be practically applied to security operations at minimal cost (~$2/month), providing automated Tier 1 SOC analyst capabilities for organisations that lack 24/7 security operations centre staffing.
+The six-pipeline architecture balances security and velocity through specialisation and parallelism. The PR Validation pipeline runs in under two minutes, providing fast feedback without impeding the developer workflow. The App CI/CD pipeline runs in eight to ten minutes, performing comprehensive scanning during the build phase while the developer has already moved on. Monthly scheduled scans and secret rotation run autonomously without developer involvement. The key architectural insight is that not all security checks need to run on every commit \- fast checks run on PRs, comprehensive checks run on merges, and audit checks run on schedules.
 
----
+**RQ3: How can policy-as-code enforcement be combined with runtime threat detection to achieve defence-in-depth for containerised workloads?**
 
-## Chapter 8: Conclusion and Future Work
+The dual-engine policy approach (Kyverno \+ OPA) provides deployment-time enforcement through twenty-five rules covering container privilege, resource management, image security, and network controls. Falco extends enforcement into runtime with thirteen rules covering execution, persistence, privilege escalation, credential access, and data exfiltration \- threat categories that cannot be addressed through static policy validation. The result is a defence-in-depth model where thirty-eight rules span the complete lifecycle from admission to runtime, with each engine covering domains where it has the greatest detection capability.
 
-### 8.1 Summary of Contributions
+**RQ4: To what extent can AI enrichment of runtime security events reduce Mean Time to Understand (MTTU) for security incidents?**
 
-This thesis presents five primary contributions:
+The AI Security Collector demonstrates that LLM-based enrichment can automatically generate threat assessments, investigation steps, and remediation recommendations for Falco security events, providing contextual analysis that would otherwise require manual analyst effort. The non-blocking architecture ensures that alerting latency is unaffected by AI processing time. While formal MTTU measurement is outside the current project scope (it would require a controlled experiment with SOC analysts), the enriched reports provide structured analysis that directly addresses the alert fatigue problem identified by Alahmadi *et al.* (2020).
 
-**Contribution 1: Zero-Trust DevSecOps Reference Architecture**
-A complete, production-deployed six-layer architecture implementing NIST SP 800-207 Zero Trust principles across infrastructure (Terraform/OCI), platform (Kubernetes/ArgoCD), application (Node.js microservices), CI/CD (GitHub Actions), runtime (Falco eBPF), and observability (Prometheus/Grafana/Loki). The architecture is fully documented and reproducible from the open-source repository.
 
-**Contribution 2: Multi-Pipeline Security Integration Model**
-A six-pipeline CI/CD architecture integrating 10 security tools (Trivy, Checkov, Gitleaks, Syft, OPA/Conftest, Kyverno CLI, kubeval, npm audit, SealedSecrets, Falco) with 10 hard security gates that prevent non-compliant deployments while maintaining developer velocity through temporal separation of checks.
+## **6.3 Comparison with Existing Approaches**
 
-**Contribution 3: Dual-Engine Policy-as-Code Framework**
-A framework combining OPA/Rego (16 rules) for CI/CD policy validation and Kyverno YAML (9 rules) for Kubernetes-native enforcement, demonstrating that complementary policy engines provide broader coverage than either engine alone.
+Table 19 compares this project's approach with existing Zero Trust and DevSecOps implementations in the literature.
 
-**Contribution 4: Automated Secret Lifecycle Management**
-A fully automated secret rotation pipeline using SealedSecrets + GitHub Actions + MongoDB Atlas API + ArgoCD, with Git-committed audit trails providing compliance evidence for each rotation cycle.
+*Table 19: Comparison with existing approaches*
 
-**Contribution 5: AI-Augmented Runtime Security Monitoring**
-An integration pattern connecting Falco eBPF runtime events to Azure OpenAI GPT-4o-mini via a purpose-built FastAPI collector service, generating contextual threat narratives that reduce mean time to understand (MTTU) for security incidents.
+| Aspect | This Project | NIST SP 800-207 | DISA ZT Ref Arch | Shamim et al. (2020) | OWASP DevSecOps |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Type | Implementation | Reference architecture | Reference architecture | Systematisation | Guideline |
+| Scope | 6 layers, full lifecycle | Conceptual tenets | 7 pillars (conceptual) | 11 considerations | Pipeline-focused |
+| Policy engines | 2 (Kyverno \+ OPA) | Not specified | Not specified | Discussed theoretically | OPA recommended |
+| Runtime security | Falco eBPF (13 rules) | Continuous monitoring (tenet) | Discussed conceptually | Discussed theoretically | Not addressed |
+| AI integration | GPT-4o-mini enrichment | Not addressed | Not addressed | Not addressed | Not addressed |
+| SBOM | Dual format (SPDX \+ CycloneDX) | Recommended | Recommended | Not addressed | Recommended |
+| Secret management | Automated rotation \+ audit | Mentioned | Required | Listed as consideration | Not detailed |
+| Reproducibility | Open-source, Git-managed | N/A | N/A | N/A | Tool recommendations |
+| Evaluation | NIST \+ MITRE ATT\&CK mapping | N/A | N/A | Taxonomy only | N/A |
 
-### 8.2 Future Work
+The comparison highlights that this project provides a concrete, reproducible implementation that bridges the gap between conceptual frameworks (NIST, DISA) and practical guidance documents (OWASP) by demonstrating how Zero Trust principles translate into specific tools, configurations, and automated controls within a real Kubernetes deployment.
 
-Based on the limitations identified in Section 7.4, the following directions are proposed for future research:
+## **6.4 Limitations and Threats to Validity**
 
-**1. Machine Learning-Based Anomaly Detection**
-The AI Security Collector's data collection infrastructure (Falco events → Loki) provides a foundation for training supervised and unsupervised anomaly detection models. Planned work includes:
-- Isolation Forest for simple anomaly scoring
-- Autoencoder neural networks for non-linear pattern detection
-- LSTM temporal models for sequence-based anomaly detection
-- Comparative evaluation against Falco rule-only baseline
+**Internal validity:**
 
-**2. Comprehensive Network Policy Implementation**
-Deploying default-deny NetworkPolicies with explicit per-service allow rules for all namespaces, completing the microsegmentation layer of the Zero Trust architecture.
+* The evaluation relies primarily on repository evidence and design analysis rather than runtime experiments with controlled attack scenarios. While this approach verifies that controls are implemented, it does not measure their effectiveness against real adversaries.  
+* The compliance mapping is based on the author's interpretation of NIST SP 800-207 tenets and MITRE ATT\&CK techniques. Different interpretations could yield different compliance assessments.
 
-**3. In-Cluster Admission Controller Deployment**
-Deploying Kyverno as a Kubernetes admission webhook and OPA Gatekeeper for runtime policy enforcement, closing the gap between CI/CD-only and runtime enforcement.
+**External validity:**
 
-**4. Image Signature Verification**
-Implementing Sigstore/Cosign image signing in the CI/CD pipeline and Kyverno image signature verification policies at admission time, providing cryptographic supply chain integrity.
+* The framework is implemented on a single, small-scale Kubernetes cluster (three nodes) with a simple microservices application. The scalability of the approach to larger, more complex environments has not been validated.  
+* The project uses Oracle Cloud Infrastructure; transferability to other cloud providers (AWS, Azure, GCP) would require modifications to the Terraform definitions but the Kubernetes-level controls should remain applicable.  
+* The FreshBonds application is a purpose-built demonstration system; real-world applications with more complex business logic may introduce additional security considerations.
 
-**5. Adversarial Testing and Red Team Evaluation**
-Conducting structured penetration testing against the deployed framework to validate detection and prevention effectiveness under real-world attack scenarios, including MITRE ATT&CK-based attack simulations.
+**Construct validity:**
 
-**6. Multi-Cluster and Multi-Environment Scalability**
-Extending the framework to multi-cluster deployments with federated policy management and cross-cluster observability correlation.
+* Policy rule counts and tool integration counts are used as proxies for security coverage. A higher count does not necessarily equate to better security \- rule quality, specificity, and false-positive rates are equally important but are harder to measure without operational data.  
+* The MITRE ATT\&CK coverage analysis identifies which techniques are detectable but does not measure detection accuracy (true positive rate, false positive rate) under realistic attack conditions.
 
-### 8.3 Closing Remarks
+**Specific limitations:**
 
-The shift to cloud-native architectures demands a corresponding shift in security practices. Perimeter-based security models cannot protect distributed, ephemeral, container-based workloads. Zero Trust Architecture provides the principled foundation, and DevSecOps provides the operational methodology, but neither is sufficient alone. This thesis demonstrates that automating continuous compliance requires the integration of both — Zero Trust principles operationalised through DevSecOps automation at every layer of the technology stack.
+1. No formal penetration testing or red-team evaluation.  
+2. No multi-cluster federation or service mesh (mutual TLS) validation.  
+3. No quantitative performance benchmarking (pipeline execution times, Falco overhead).  
+4. No image signature verification (Sigstore/Cosign) implementation.  
+5. No unit or integration test suite for microservices.  
+6. NetworkPolicy implementation covers default-deny at the namespace level but lacks comprehensive per-service micro-segmentation.  
+7. In-cluster admission controller deployment (Kyverno as a webhook) is defined but not fully validated in production.
 
-The framework presented here is not a theoretical exercise. It is a production-deployed system that handles real deployments, enforces real policies, rotates real secrets, and monitors real runtime behaviour. The 39 policy rules, 10 security tools, 6 CI/CD pipelines, and AI-augmented monitoring collectively provide continuous compliance — not as a static checkpoint but as a continuously enforced property of the system.
+## **6.5 Implications for Practice**
 
-The future of cloud-native security lies in ever-deeper automation: policies that not only detect but remediate, AI that not only reports but triages, and systems that not only comply but continuously prove their compliance. This thesis provides a step on that path.
+This project has several implications for practitioners seeking to implement Zero Trust in Kubernetes environments:
 
----
+1. **Start with GitOps.** The Argo CD GitOps model provides the foundation for all other controls \- it ensures that the cluster state is declarative, version-controlled, and auditable. Without GitOps, security configurations tend to drift from their intended state through manual changes.  
+2. **Use multiple policy engines.** No single policy engine covers all security domains. The combination of Kyverno (Kubernetes-native, YAML-based) and OPA (general-purpose, Rego-based) provides broader coverage than either alone. Practitioners should select engines based on their team's existing skill set and the specific policy requirements.  
+3. **Separate pipeline concerns.** Using six specialised pipelines rather than a single monolithic pipeline provides better isolation, clearer failure modes, and the ability to run different checks at different frequencies (every PR, every merge, monthly schedules).  
+4. **Automate secret rotation.** Manual secret rotation is error-prone and frequently deferred. Automated monthly rotation with health check verification and Git-based audit trails removes human bottlenecks and provides compliance evidence.  
+5. **Plan for runtime detection from the start.** Left-shift security is necessary but not sufficient. Runtime threats such as container compromise, privilege escalation, and data exfiltration require kernel-level monitoring (e.g., Falco with eBPF) that operates independently of the CI/CD pipeline.
 
-## References
+# **7\. Conclusion and Future Work**
 
-Alahmadi, B. A., Axon, L., & Sherren, T. (2020). 99% false positives: A qualitative study of SOC analysts' perspectives on security alarms. *USENIX Security Symposium*, pp. 2203-2220.
+## **7.1 Conclusion**
 
-Aqua Security. (2024). Trivy: A comprehensive and versatile security scanner. Retrieved from https://trivy.dev/
+This project has designed, implemented, and evaluated a comprehensive Zero-Trust DevSecOps framework for Kubernetes microservices, demonstrating that continuous compliance can be achieved through the systematic integration of automated security controls across six architectural layers. The framework \- implemented as the FreshBonds production system on Oracle Cloud Infrastructure \- integrates thirty-eight policy rules across three engines (Kyverno, OPA, Falco), ten security tools across six CI/CD pipelines, twenty-two Prometheus alert rules, fourteen Grafana/Loki alert rules, automated monthly secret rotation, dual-format SBOM generation, and AI-augmented runtime security monitoring.
 
-Biden, J. R. (2021). Executive Order 14028: Improving the Nation's Cybersecurity. *Federal Register*, 86(93), 26633-26647.
+The evaluation against NIST SP 800-207 demonstrates compliance with all seven Zero Trust tenets. The MITRE ATT\&CK mapping confirms coverage of thirteen techniques across eight tactics. The pipeline architecture blocks one hundred per cent of deployments containing CRITICAL CVEs, while maintaining developer-acceptable build times through specialised pipeline design.
 
-Bridgecrew. (2024). Checkov: Policy-as-code for everyone. Retrieved from https://www.checkov.io/
+The core finding of this project is that continuous compliance is operationalisable as a set of automated control points across the delivery lifecycle, rather than as periodic manual audits. By expressing security policies as code, automating security verification at every pipeline stage, monitoring runtime behaviour through kernel-level instrumentation, and enriching security events with AI-generated context, organisations can maintain a strong security posture that scales with deployment frequency rather than being overwhelmed by it.
 
-Brown, S. (2018). *The C4 model for visualising software architecture*. Leanpub.
+This project contributes a reproducible reference implementation that bridges the gap between conceptual Zero Trust frameworks and practical Kubernetes security automation. The complete implementation is available as the zero-trust-devsecops Git repository, providing practitioners and researchers with a concrete, version-controlled artefact that can be studied, adapted, and extended for their own environments.
 
-Burns, B., Grant, B., Oppenheimer, D., Brewer, E., & Wilkes, J. (2016). Borg, Omega, and Kubernetes: Lessons learned from three container-management systems over a decade. *ACM Queue*, 14(1), 70-93.
+## **7.2 Future Work**
 
-CIS. (2024). CIS Kubernetes Benchmark v1.8. Center for Internet Security.
+Table 20 identifies areas for future improvement, categorised by priority and expected impact.
 
-Cloud Native Computing Foundation. (2024). CNCF Annual Survey 2024. Retrieved from https://www.cncf.io/reports/
+*Table 20: Future work areas and planned improvements*
 
-Cloud Security Alliance. (2022). DevSecOps: Integrating Security into DevOps. CSA Working Group Publication.
+| \# | Area | Description | Priority | Expected Impact |
+| :---- | :---- | :---- | :---- | :---- |
+| 1 | ML-based anomaly detection | Implement Isolation Forest, Autoencoder, and LSTM models for Falco event anomaly scoring, enabling detection of novel attack patterns beyond rule-based matching | High | Improved detection of zero-day threats |
+| 2 | In-cluster admission control | Deploy Kyverno as a Kubernetes admission webhook for real-time enforcement at the API server level, beyond CI/CD-time validation | High | Prevents policy bypass through direct cluster access |
+| 3 | Comprehensive NetworkPolicy | Implement per-service NetworkPolicy micro-segmentation beyond namespace-level default-deny | High | Stronger east-west traffic control |
+| 4 | Image signature verification | Integrate Sigstore/Cosign for image signing in CI/CD and Kyverno verification policy for admission control | Medium | Ensures image provenance and integrity |
+| 5 | Red-team evaluation | Conduct formal penetration testing against the deployed framework using adversarial simulation scripts mapped to MITRE ATT\&CK techniques | Medium | Validates real-world detection effectiveness |
+| 6 | Multi-cluster federation | Extend the framework to multi-cluster environments with centralised policy management and distributed monitoring | Medium | Validates scalability for enterprise adoption |
+| 7 | Service mesh mutual TLS | Integrate Istio or Linkerd for automatic mutual TLS between services, eliminating the need for application-level TLS configuration | Low | Stronger internal communication security |
+| 8 | Unit and integration testing | Develop comprehensive test suites for microservices using Jest and for ML models using pytest | Low | Improved code quality and regression detection |
 
-DISA. (2021). Department of Defense Zero Trust Reference Architecture. Defense Information Systems Agency.
+# **8\. Contribution and Novelty**
 
-Falco. (2024). The Falco Project: Cloud-native runtime security. Retrieved from https://falco.org/
+Table 21 summarises the key contributions of this project.
 
-Fitzgerald, B., & Stol, K. J. (2017). Continuous software engineering: A roadmap and agenda. *Journal of Systems and Software*, 123, 176-189.
+*Table 21: Project contributions summary*
 
-Hevner, A. R., March, S. T., Park, J., & Ram, S. (2004). Design science in information systems research. *MIS Quarterly*, 28(1), 75-105.
+| \# | Contribution | Description |
+| :---- | :---- | :---- |
+| 1 | Zero-Trust DevSecOps reference implementation | A complete, reproducible, production-deployed implementation of Zero Trust principles for Kubernetes microservices, available as an open Git repository. |
+| 2 | Lifecycle-based continuous compliance model | A model that connects PR validation, CI/CD scanning, GitOps deployment, scheduled audits, secret rotation, runtime detection, and incident reporting into a unified compliance pipeline. |
+| 3 | Dual policy-as-code design | A complementary approach using Kyverno (Kubernetes-native YAML) and OPA (general-purpose Rego) that demonstrates how multiple policy engines can provide broader coverage than either alone. |
+| 4 | Supply chain evidence model | Implementation of dual-format SBOM generation (SPDX \+ CycloneDX) with Trivy vulnerability scanning, approved registry enforcement, and image tag policy \- producing machine-readable supply chain evidence at every build. |
+| 5 | Secret lifecycle automation pattern | End-to-end automated secret rotation using GitHub Actions, Sealed Secrets, MongoDB Atlas API integration, and Git-based audit logging \- demonstrating a complete credential lifecycle from generation through deployment to verification. |
+| 6 | AI-assisted runtime security reporting | A non-blocking AI enrichment architecture that augments Falco security events with GPT-4o-mini-generated threat assessments, investigation steps, and remediation recommendations without introducing critical-path dependency. |
+| 7 | MIS-level evaluation structure | A reproducible evaluation methodology mapping implementation evidence to NIST SP 800-207 tenets, MITRE ATT\&CK techniques, and practical compliance metrics. |
 
-Jeyaraj, A. (2023). Zero trust security in cloud-native environments: Challenges and implementation strategies. *Journal of Cloud Computing*, 12(1), 1-18.
+**Novelty statement:** The novelty of this project lies in the integrated artefact rather than in any single tool. Many projects use Trivy, Kyverno, Falco, or Argo CD separately. This project combines them into a single continuous compliance pipeline with repository evidence, runtime monitoring, and AI-enriched incident context. The dual-engine policy approach, the non-blocking AI enrichment architecture, and the automated secret lifecycle management pattern are specific design contributions that have not been demonstrated in combination in the existing literature.
 
-Kindervag, J. (2010). Build security into your network's DNA: The Zero Trust network architecture. Forrester Research Report.
+# **9\. References**
 
-Kubernetes. (2024). Kubernetes Documentation. Retrieved from https://kubernetes.io/docs/
+Alahmadi, B. A., Axon, L. and Sherren, T. (2020) '99% false positives: a qualitative study of SOC analysts' perspectives on security alarms', *USENIX Security Symposium*, pp. 2203–2220.
 
-Kyverno. (2024). Kyverno: Kubernetes Native Policy Management. Retrieved from https://kyverno.io/
+Anchore (2026) *Syft documentation*. Available at: https://github.com/anchore/syft (Accessed: 13 April 2026).
 
-MITRE. (2024). ATT&CK for Containers. Retrieved from https://attack.mitre.org/matrices/enterprise/containers/
+Aqua Security (2024) *Trivy: a comprehensive and versatile security scanner*. Available at: https://trivy.dev/ (Accessed: 13 April 2026).
 
-Myrbakken, H., & Colomo-Palacios, R. (2017). DevSecOps: A multivocal literature review. In *International Conference on Software Process Improvement and Capability Determination* (pp. 17-29). Springer.
+Biden, J. R. (2021) 'Executive Order 14028: Improving the Nation's Cybersecurity', *Federal Register*, 86(93), pp. 26633–26647.
 
-OPA. (2024). Open Policy Agent. Retrieved from https://www.openpolicyagent.org/
+Bitnami Labs (2026) *Sealed Secrets*. Available at: https://github.com/bitnami-labs/sealed-secrets (Accessed: 13 April 2026).
 
-OWASP. (2023). OWASP DevSecOps Guidelines. Retrieved from https://owasp.org/www-project-devsecops-guideline/
+Bridgecrew (2024) *Checkov: policy-as-code for everyone*. Available at: https://www.checkov.io/ (Accessed: 13 April 2026).
 
-PCI SSC. (2022). PCI DSS v4.0: Payment Card Industry Data Security Standard. PCI Security Standards Council.
+Burns, B., Grant, B., Oppenheimer, D., Brewer, E. and Wilkes, J. (2016) 'Borg, Omega, and Kubernetes: lessons learned from three container-management systems over a decade', *ACM Queue*, 14(1), pp. 70–93.
 
-Peffers, K., Tuunanen, T., Rothenberger, M. A., & Chatterjee, S. (2007). A design science research methodology for information systems research. *Journal of Management Information Systems*, 24(3), 45-77.
+CIS (2024) *CIS Kubernetes Benchmark v1.8*. Center for Internet Security.
 
-Red Hat. (2024). The State of Kubernetes Security Report 2024. Retrieved from https://www.redhat.com/en/resources/state-kubernetes-security-report
+Cloud Native Computing Foundation (2024) *CNCF Annual Survey 2024*. Available at: https://www.cncf.io/reports/ (Accessed: 13 April 2026).
 
-Rice, L. (2022). *Learning eBPF: Programming the Linux Kernel for Enhanced Observability, Networking, and Security*. O'Reilly Media.
+Cloud Security Alliance (2022) *DevSecOps: integrating security into DevOps*. CSA Working Group Publication.
 
-Rose, S., Borchert, O., Mitchell, S., & Connelly, S. (2020). Zero Trust Architecture. NIST Special Publication 800-207.
+DISA (2021) *Department of Defense Zero Trust Reference Architecture*. Defense Information Systems Agency.
 
-Sanchez-Gordon, S., & Colomo-Palacios, R. (2020). Security as code: A systematic mapping study. In *International Conference on Computational Science and Its Applications* (pp. 159-174). Springer.
+Falco (2024) *The Falco Project: cloud-native runtime security*. Available at: https://falco.org/ (Accessed: 13 April 2026).
 
-Shamim, M. S., Bhuiyan, F. A., & Rahman, A. (2020). XI commandments of Kubernetes security: A systematization of knowledge related to Kubernetes security practices. *IEEE Secure Development Conference (SecDev)*, pp. 58-64.
+Fitzgerald, B. and Stol, K. J. (2017) 'Continuous software engineering: a roadmap and agenda', *Journal of Systems and Software*, 123, pp. 176–189.
 
-Sonatype. (2023). 9th Annual State of the Software Supply Chain Report. Sonatype Inc.
+Hevner, A. R., March, S. T., Park, J. and Ram, S. (2004) 'Design science in information systems research', *MIS Quarterly*, 28(1), pp. 75–105.
 
-Souppaya, M., Morello, J., & Scarfone, K. (2023). Strategies for the Integration of Software Supply Chain Security in DevSecOps CI/CD Pipelines. NIST Special Publication 800-204C.
+Jeyaraj, A. (2023) 'Zero trust security in cloud-native environments: challenges and implementation strategies', *Journal of Cloud Computing*, 12(1), pp. 1–18.
 
----
+Kindervag, J. (2010) *Build security into your network's DNA: the Zero Trust network architecture*. Forrester Research Report.
 
-## Appendices
+Kubernetes (2024) *Kubernetes documentation: Pod Security Standards*. Available at: https://kubernetes.io/docs/concepts/security/pod-security-standards/ (Accessed: 13 April 2026).
 
-### Appendix A: Complete Security Tool Configuration Matrix
+Kyverno (2024) *Kyverno: Kubernetes native policy management*. Available at: https://kyverno.io/ (Accessed: 13 April 2026).
+
+Microsoft (2024) *Azure OpenAI Service documentation*. Available at: https://learn.microsoft.com/azure/ai-services/openai/ (Accessed: 13 April 2026).
+
+MITRE (2024) *ATT\&CK for Containers*. Available at: https://attack.mitre.org/matrices/enterprise/containers/ (Accessed: 13 April 2026).
+
+Myrbakken, H. and Colomo-Palacios, R. (2017) 'DevSecOps: a multivocal literature review', in *Software Process Improvement and Capability Determination*. Cham: Springer, pp. 17–29.
+
+OPA (2024) *Open Policy Agent*. Available at: https://www.openpolicyagent.org/ (Accessed: 13 April 2026).
+
+OWASP (2023) *OWASP DevSecOps guideline*. Available at: https://owasp.org/www-project-devsecops-guideline/ (Accessed: 13 April 2026).
+
+Peffers, K., Tuunanen, T., Rothenberger, M. A. and Chatterjee, S. (2007) 'A design science research methodology for information systems research', *Journal of Management Information Systems*, 24(3), pp. 45–77.
+
+Red Hat (2024) *The State of Kubernetes Security Report 2024*. Available at: https://www.redhat.com/en/resources/state-kubernetes-security-report (Accessed: 13 April 2026).
+
+Rice, L. (2022) *Learning eBPF: programming the Linux kernel for enhanced observability, networking, and security*. O'Reilly Media.
+
+Rose, S., Borchert, O., Mitchell, S. and Connelly, S. (2020) *Zero Trust Architecture*. NIST Special Publication 800-207. Gaithersburg, MD: National Institute of Standards and Technology.
+
+Shamim, M. S., Bhuiyan, F. A. and Rahman, A. (2020) 'XI commandments of Kubernetes security: a systematization of knowledge related to Kubernetes security practices', *IEEE Secure Development Conference (SecDev)*, pp. 58–64.
+
+Sonatype (2023) *9th Annual State of the Software Supply Chain Report*. Sonatype Inc.
+
+Souppaya, M., Morello, J. and Scarfone, K. (2023) *Strategies for the integration of software supply chain security in DevSecOps CI/CD pipelines*. NIST Special Publication 800-204C. Gaithersburg, MD: National Institute of Standards and Technology.
+
+# **10\. Appendices**
+
+## **Appendix A: Security Tool Configuration Matrix**
+
+*Table A.1: Complete security tool configuration matrix*
 
 | Tool | Type | Phase | Pipeline(s) | Blocking | Output Format |
-|------|------|-------|-------------|----------|---------------|
-| **Trivy** | Container vulnerability scanner | Build, Post-deploy | app-cicd, ai-collector-cicd, security-scan | Yes (CRITICAL) | SARIF, JSON |
-| **Trivy** (secret mode) | Embedded secret scanner | Build | app-cicd | Yes | JSON |
-| **Checkov** | IaC security scanner | Build, Post-deploy | app-cicd, terraform, security-scan | Yes | SARIF, JSON |
-| **Gitleaks** | Git secret scanner | Pre-merge | pr-validation | Yes | JSON |
-| **Syft** | SBOM generator | Build | app-cicd, ai-collector-cicd | No (generates artefact) | SPDX, CycloneDX |
-| **OPA/Conftest** | Policy validator (Rego) | Build, Post-deploy | app-cicd, security-scan | Yes | Text |
-| **Kyverno CLI** | Policy validator (YAML) | Build, Post-deploy | app-cicd, security-scan | Yes | Text |
-| **kubeval** | K8s manifest validator | Pre-merge | pr-validation | Yes | Text |
-| **npm audit** | Dependency vulnerability scanner | Post-deploy | security-scan | Yes (MODERATE+) | JSON |
-| **kubeseal** | Secret encryption | Rotation | secret-rotation | N/A | YAML |
-| **Falco** | Runtime security monitor | Runtime | N/A (DaemonSet) | Alert | JSON |
-| **ESLint** | Code linter | Pre-merge | pr-validation | Yes | Text |
-| **yamllint** | YAML linter | Pre-merge | pr-validation | Yes | Text |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Trivy | Container vulnerability scanner | Build, Post-deploy | app-cicd, ai-collector-cicd, security-scan | Yes (CRITICAL) | SARIF, JSON |
+| Trivy (secret mode) | Embedded secret scanner | Build | app-cicd | Yes | JSON |
+| Checkov | IaC security scanner | Build, Post-deploy | app-cicd, terraform, security-scan | Yes | SARIF, JSON |
+| Gitleaks | Git secret scanner | Pre-merge | pr-validation | Yes | JSON |
+| Syft | SBOM generator | Build | app-cicd, ai-collector-cicd | No (artefact) | SPDX, CycloneDX |
+| OPA/Conftest | Policy validator (Rego) | Build, Post-deploy | app-cicd, security-scan | Yes | Text |
+| Kyverno CLI | Policy validator (YAML) | Build, Post-deploy | app-cicd, security-scan | Yes | Text |
+| kubeval | K8s manifest validator | Pre-merge | pr-validation | Yes | Text |
+| npm audit | Dependency vulnerability scanner | Post-deploy | security-scan | Yes (MODERATE+) | JSON |
+| kubeseal | Secret encryption | Rotation | secret-rotation | N/A | YAML |
+| Falco | Runtime security monitor | Runtime | N/A (DaemonSet) | Alert | JSON |
+| ESLint | Code linter | Pre-merge | pr-validation | Yes | Text |
+| yamllint | YAML linter | Pre-merge | pr-validation | Yes | Text |
 
-### Appendix B: Kyverno and OPA Policy Specifications
+## **Appendix B: Kyverno and OPA Policy Specifications**
 
-**Kyverno ClusterPolicy: Pod Security** (`validationFailureAction: enforce`)
+*Table B.1: Kyverno ClusterPolicy \- Pod security rules*
 
-| Rule | Resource | Validation Pattern |
-|------|----------|--------------------|
-| run-as-non-root | Deployments (production, dev) | `spec.template.spec.securityContext.runAsNonRoot: true` |
-| disallow-privileged | All Deployments | `spec.template.spec.containers[*].securityContext.privileged: false` |
-| require-resource-limits | All Deployments | `spec.template.spec.containers[*].resources.limits.cpu` and `.memory` must exist |
-| drop-all-capabilities | All Deployments | `spec.template.spec.containers[*].securityContext.capabilities.drop: ["ALL"]` |
-| disallow-privilege-escalation | All Deployments | `spec.template.spec.containers[*].securityContext.allowPrivilegeEscalation: false` |
-| read-only-root-filesystem | Production Deployments | `spec.template.spec.containers[*].securityContext.readOnlyRootFilesystem: true` |
+| Rule | Target Resource | Validation Pattern | Mode |
+| :---- | :---- | :---- | :---- |
+| run-as-non-root | Deployments (production, dev) | spec.template.spec.securityContext.runAsNonRoot: true | Enforce |
+| disallow-privileged | All Deployments | spec.template.spec.containers\[\].securityContext.privileged: false | Enforce |
+| require-resource-limits | All Deployments | containers\[\].resources.limits.cpu and .memory must exist | Enforce |
+| drop-all-capabilities | All Deployments | containers\[\].securityContext.capabilities.drop: \["ALL"\] | Enforce |
+| disallow-privilege-escalation | All Deployments | containers\[\].securityContext.allowPrivilegeEscalation: false | Enforce |
+| read-only-root-filesystem | Production Deployments | containers\[\].securityContext.readOnlyRootFilesystem: true | Enforce |
 
-**Kyverno ClusterPolicy: Image Verification** (`validationFailureAction: enforce`)
+*Table B.2: Kyverno ClusterPolicy \- Image verification rules*
 
-| Rule | Resource | Validation Pattern |
-|------|----------|--------------------|
-| disallow-latest-tag | All Deployments | Image tag must not be `latest` or empty |
-| require-approved-registry | Production Deployments | Image must match `docker.io/*`, `ghcr.io/*`, or `gcr.io/*` |
-| require-image-pull-policy | All Deployments | `imagePullPolicy` must be `Always` or `IfNotPresent` |
+| Rule | Target Resource | Validation Pattern | Mode |
+| :---- | :---- | :---- | :---- |
+| disallow-latest-tag | All Deployments | Image tag must not be :latest; explicit version required | Enforce |
+| require-approved-registry | Production Deployments | Image registry must be docker.io, ghcr.io, or gcr.io | Enforce |
+| require-image-pull-policy | All Deployments | imagePullPolicy must be Always or IfNotPresent | Enforce |
 
-**OPA Security Policy** (`policies/opa/security.rego`):
+*Table B.3: OPA/Rego policy rules \- security.rego*
 
-| Type | Rule Name | Condition |
-|------|-----------|-----------|
-| deny | runAsNonRoot | `securityContext.runAsNonRoot` must be `true` |
-| deny | privileged | `securityContext.privileged` must not be `true` |
-| deny | resource limits | `resources.limits` must be set for all containers |
-| warn | readiness probe | `readinessProbe` should be configured |
-| warn | liveness probe | `livenessProbe` should be configured |
-| deny | privilege escalation | `allowPrivilegeEscalation` must be `false` |
-| deny | latest tag | Image tag must not be `:latest` |
-| deny | approved registries | Image must be from `docker.io`, `ghcr.io`, or `gcr.io` |
-| deny | hostPath volumes | No `hostPath` volume mounts allowed |
-| warn | readOnlyRootFilesystem | Should be `true` |
-| deny | dangerous capabilities | Only `NET_BIND_SERVICE` may be added |
-| deny | drop ALL capabilities | Must drop ALL capabilities |
+| \# | Rule Name | Severity | Policy Expression |
+| :---- | :---- | :---- | :---- |
+| 1 | runAsNonRoot | deny | Containers must set runAsNonRoot: true |
+| 2 | privileged | deny | Containers must not set privileged: true |
+| 3 | resource-limits | deny | Containers must define CPU and memory limits |
+| 4 | readiness-probe | warn | Containers should define readiness probes |
+| 5 | liveness-probe | warn | Containers should define liveness probes |
+| 6 | privilege-escalation | deny | allowPrivilegeEscalation must be false |
+| 7 | latest-tag | deny | Image tag must not be :latest |
+| 8 | approved-registry | deny | Image registry must be in allowlist |
+| 9 | hostPath-volume | deny | Pods must not use hostPath volumes |
+| 10 | read-only-root | warn | Root filesystem should be read-only |
+| 11 | dangerous-capabilities | deny | Must not add SYS\_ADMIN, NET\_ADMIN, ALL capabilities |
+| 12 | drop-ALL | deny | Must drop ALL capabilities |
+| 13 | env-var-validation | deny | Environment variables must not contain credential patterns |
 
-**OPA Network Policy** (`policies/opa/network.rego`):
+*Table B.4: OPA/Rego policy rules \- network.rego*
 
-| Type | Rule Name | Condition |
-|------|-----------|-----------|
-| deny | NetworkPolicy required | Every namespace must have an associated NetworkPolicy |
-| warn | LoadBalancer | Services using LoadBalancer type are flagged |
-| warn | missing selector | Services without selectors are flagged |
+| \# | Rule Name | Severity | Policy Expression |
+| :---- | :---- | :---- | :---- |
+| 14 | networkpolicy-required | deny | Every namespace must have at least one NetworkPolicy |
+| 15 | loadbalancer-warning | warn | Services of type LoadBalancer should be reviewed |
+| 16 | missing-selector | warn | Services without pod selectors should be flagged |
 
-### Appendix C: Falco Custom Rules with MITRE Mapping
+## **Appendix C: Falco Custom Rules with MITRE ATT\&CK Mapping**
 
-| # | Rule Name | Priority | MITRE Tactic | MITRE Technique | Detection Condition |
-|---|-----------|----------|-------------|-----------------|---------------------|
-| 1 | Shell Spawned in Container | WARNING | Execution | T1059 | `spawned_process and container and proc.name in (bash, sh, zsh, dash, ksh)` |
-| 2 | Package Management in Container | WARNING | Persistence | T1546 | `spawned_process and container and proc.name in (apt, apt-get, yum, pip, npm)` |
-| 3 | Detect Crypto Mining | CRITICAL | Impact | T1496 | `spawned_process and container and (proc.name in (xmrig, minerd) or proc.cmdline contains stratum)` |
-| 4 | Read Sensitive File | WARNING | Credential Access | T1552 | `open_read and container and sensitive_files` |
-| 5 | Privilege Escalation via Setuid | CRITICAL | Privilege Escalation | T1548 | `container and evt.type = setuid and evt.arg.uid = 0` |
-| 6 | Reverse Shell | CRITICAL | Execution | T1059.004 | `container and fd.type = ipv4 and proc.name in (nc, ncat, bash, python)` |
-| 7 | Container Escape Attempt | CRITICAL | Privilege Escalation | T1611 | `container and proc.name in (nsenter, docker, runc, crictl)` |
-| 8 | Outbound Suspicious Port | WARNING | Command & Control | T1571 | `container and outbound and fd.sport in (4444, 5555, 6666, 1337)` |
-| 9 | Suspicious File Modification | CRITICAL | Persistence | T1543 | `container and open_write and fd.name in (/etc/passwd, /etc/shadow, crontab, authorized_keys)` |
-| 10 | Network Reconnaissance | WARNING | Discovery | T1046 | `container and spawned_process and proc.name in (nmap, masscan, zmap)` |
-| 11 | Suspicious DNS Query | WARNING | Command & Control | T1071.004 | `container and evt.type in (sendto, connect) and fd.name contains (tor, proxy, vpn)` |
-| 12 | Large Data Transfer | WARNING | Exfiltration | T1048 | `container and fd.type = ipv4 and evt.rawarg.res > 10485760` |
-| 13 | Read Sensitive File Untrusted | WARNING | Credential Access | T1552.001 | `open_read and sensitive_files and not trusted_containers` |
-| 14 | (Macro: sensitive_files) | — | — | — | `/etc/shadow, /etc/sudoers, /etc/pam.d, .ssh/*, .aws/*, .kube/*` |
+*Table C.1: Complete Falco custom rule inventory with MITRE ATT\&CK mapping*
 
-### Appendix D: CI/CD Pipeline Specifications
+| \# | Rule Name | Priority | MITRE Tactic | MITRE Technique | Detection Condition |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| 1 | Shell Spawned in Container | WARNING | Execution | T1059 | spawned\_process and container and proc.name in (bash, sh, zsh, dash, ksh) |
+| 2 | Package Management in Container | WARNING | Persistence | T1546 | spawned\_process and container and proc.name in (apt, apt-get, yum, pip, npm) |
+| 3 | Detect Crypto Mining | CRITICAL | Impact | T1496 | spawned\_process and container and (proc.name in (xmrig, minerd) or proc.cmdline contains stratum) |
+| 4 | Read Sensitive File | WARNING | Credential Access | T1552 | open\_read and container and sensitive\_files |
+| 5 | Privilege Escalation via Setuid | CRITICAL | Privilege Escalation | T1548 | container and evt.type \= setuid and evt.arg.uid \= 0 |
+| 6 | Reverse Shell Detection | CRITICAL | Execution | T1059.004 | container and fd.type \= ipv4 and proc.name in (nc, ncat, bash, python) |
+| 7 | Container Escape Attempt | CRITICAL | Privilege Escalation | T1611 | container and proc.name in (nsenter, docker, runc, crictl) |
+| 8 | Outbound Suspicious Port | WARNING | Command & Control | T1571 | container and outbound and fd.sport in (4444, 5555, 6666, 1337\) |
+| 9 | Suspicious File Modification | CRITICAL | Persistence | T1543 | container and open\_write and fd.name in (/etc/passwd, /etc/shadow, crontab, authorized\_keys) |
+| 10 | Network Reconnaissance | WARNING | Discovery | T1046 | container and spawned\_process and proc.name in (nmap, masscan, zmap) |
+| 11 | Suspicious DNS Query | WARNING | Command & Control | T1071.004 | container and evt.type in (sendto, connect) and fd.name contains (tor, proxy, vpn) |
+| 12 | Large Data Transfer | WARNING | Exfiltration | T1048 | container and fd.type \= ipv4 and evt.rawarg.res \> 10485760 |
+| 13 | Read Sensitive File Untrusted | WARNING | Credential Access | T1552.001 | open\_read and sensitive\_files and not trusted\_containers |
 
-| Pipeline | File | Lines | Trigger | Duration | Jobs |
-|----------|------|-------|---------|----------|------|
-| PR Validation | `pr-validation.yml` | 316 | Pull requests to main/develop | < 2 min | code-quality, security-check, pr-size-check, summary |
-| App CI/CD | `app-cicd.yml` | 523 | Push to main/develop, tags | 8-10 min | detect-changes, policy-checks, build-and-scan, update-manifests, notify |
-| AI Collector CI/CD | `ai-collector-cicd.yml` | 474 | Push to main (research/**) | 5-8 min | detect-changes, build-and-scan, update-manifests, notify |
-| Terraform | `terraform.yml` | 443 | Push/PR to main (terraform/**) | 2-4 min | validate, security-scan, plan, apply, summary |
-| Security Scan | `security-scan.yml` | 610 | Monthly (1st @ 2AM UTC) | 15-20 min | scan-images, scan-policies, scan-dependencies, scan-iac, summary |
-| Secret Rotation | `secret-rotation.yml` | 471 | Monthly (1st @ 3AM UTC) | 3-5 min | rotate-secrets |
+*Table C.2: Falco sensitive\\\_files macro definition*
 
-**Total pipeline code**: 2,837 lines of GitHub Actions YAML
+| Macro | Files Monitored |
+| :---- | :---- |
+| sensitive\_files | /etc/shadow, /etc/sudoers, /etc/pam.d/, \~/.ssh/, \~/.aws/, \~/.kube/ |
 
-### Appendix E: Grafana Dashboard and Alert Configurations
+## **Appendix D: CI/CD Pipeline Specifications**
 
-**AI Security Reports Dashboard** (8 panels):
+*Table D.1: CI/CD pipeline file specifications*
 
-| Panel | Visualisation | Data Source | Refresh |
-|-------|--------------|-------------|---------|
-| AI Reports by Priority | Donut pie chart | AI Collector REST API | 30s |
-| Recent AI Security Reports | Colour-coded table | AI Collector REST API | 30s |
-| AI Reports Timeline | Stacked time series | AI Collector REST API | 30s |
-| Top Triggered Falco Rules | Bar gauge | AI Collector REST API | 30s |
-| Latest AI Report (Full Analysis) | Markdown text | AI Collector REST API | 30s |
-| AI Collector Health | Stat indicator | AI Collector REST API | 30s |
-| Total AI Reports Generated | Stat with sparkline | AI Collector REST API | 30s |
-| AI Reporter Status | Stat indicator | AI Collector REST API | 30s |
+| Pipeline | Workflow File | Lines of YAML | Trigger | Estimated Duration | Jobs |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| PR Validation | pr-validation.yml | 316 | Pull requests to main/develop | \< 2 min | code-quality, security-check, pr-size-check, summary |
+| App CI/CD | app-cicd.yml | 523 | Push to main/develop, tags | 8–10 min | detect-changes, policy-checks, build-and-scan, update-manifests, notify |
+| AI Collector CI/CD | ai-collector-cicd.yml | 474 | Push to main (research/) | 5–8 min | detect-changes, build-and-scan, update-manifests, notify |
+| Terraform | terraform.yml | 443 | Push/PR to main (terraform/) | 2–4 min | validate, security-scan, plan, apply, summary |
+| Security Scan | security-scan.yml | 610 | Monthly (1st @ 2 AM UTC) | 15–20 min | scan-images, scan-policies, scan-dependencies, scan-iac, summary |
+| Secret Rotation | secret-rotation.yml | 471 | Monthly (1st @ 3 AM UTC) | 3–5 min | rotate-secrets |
+| Total | \~2,837 |  |  |  |  |
 
-**Prometheus Alert Rules** (19 rules):
+## **Appendix E: Grafana Alert Rule Summary**
 
-| Group | Rules | Examples |
-|-------|-------|---------|
-| freshbonds-app-alerts | 10 | ServiceDown, HighMemoryUsage, PodCrashLooping, ContainerOOMKilled |
-| infrastructure-alerts | 6 | DiskSpaceWarning, DiskSpaceCritical, NodeMemoryPressure, PVCAlmostFull |
-| falco-alerts | 3 | FalcoDown, FalcoHighEventRate, FalcoDroppedEvents |
+*Table E.1: Grafana Loki alert rules by category*
 
-**Grafana Loki Alert Rules** (14 rules):
+| Category | \# Rules | Alert Examples |
+| :---- | :---- | :---- |
+| Application Alerts | 5 | Error rate high, crash detection (CrashLoopBackOff), MongoDB connection failures, 5xx HTTP errors, payment processing failures |
+| Log Stream Alerts | 5 | High error rate in pod logs, MongoDB disconnection pattern, payment service unavailability, auth failure rate spike, pod restart loop detection |
+| Login Security Alerts | 4 | Brute force detection (failed login spike), single-user targeting (multiple attempts on one account), suspicious IP patterns, email enumeration attempts |
+| Total | 14 |  |
 
-| Category | Rules | Examples |
-|----------|-------|---------|
-| Application Alerts | 5 | Error rate high, crash detection, MongoDB failures, 5xx errors, payment failures |
-| Log Alerts | 5 | High error rate, MongoDB disconnect, payment failures, auth failure rate, pod restarts |
-| Login Security Alerts | 4 | Brute force, single-user targeting, suspicious IP, email enumeration |
+*Table E.2: Prometheus alert rules by category*
 
-**PagerDuty Alert Routing**:
+| Category | \# Rules | Alert Examples |
+| :---- | :---- | :---- |
+| Infrastructure | 6 | DiskSpaceWarning (80%), DiskSpaceCritical (95%), NodeMemoryPressure, NodeDiskPressure, PVCAlmostFull (90%), NodeNotReady |
+| Application | 10 | ServiceDown, HighMemoryUsage (\>90%), HighCPUUsage (\>90%), PodCrashLooping, ContainerOOMKilled, ServiceReplicas, ServiceAvailability, MongoDBConnectionFailures, APIGatewayHighLatency, PaymentProcessingFailures |
+| Falco Monitoring | 3 | FalcoDown (DaemonSet unavailable), FalcoHighEventRate (\>1000 events/min), FalcoDroppedEvents (kernel event loss) |
+| Prometheus Self-Monitoring | 3 | PrometheusConfigReloadFailed, PrometheusTSDBCompactionsFailed, PrometheusNotConnectedToAlertmanager |
+| Total | 22 |  |
 
-| Alert Source | PagerDuty Service | Routing |
-|-------------|-------------------|---------|
-| AlertManager (Prometheus + Falco) | Infrastructure (PKIUIBN) | severity: critical → pagerduty-critical; others → pagerduty-notifications |
-| Grafana (Loki alerts) | Application (PRZZM0D) | All → pagerduty-freshbonds-app |
-| Application code (@pagerduty/pdjs) | Application (PRZZM0D) | Direct API call |
+## **Appendix F: Repository Structure and Evidence**
 
----
+*Table F.1: Repository directory structure with artefact counts*
 
-*End of Thesis*
+| Directory | Contents | File Count | Purpose |
+| :---- | :---- | :---- | :---- |
+| src/api-gateway/ | Express.js reverse proxy with security headers | \~10 | API Gateway microservice |
+| src/user-service/ | Express.js authentication with JWT and bcrypt | \~12 | User authentication service |
+| src/product-service/ | Express.js product CRUD with RBAC | \~12 | Product management service |
+| src/frontend/ | React 18 \+ Vite \+ TailwindCSS | \~30 | Frontend SPA |
+| terraform/ | OCI infrastructure definitions | 12 | Infrastructure as Code |
+| clusters/test-cluster/ | Kubernetes cluster manifests | 22+ | Platform configuration |
+| apps/freshbonds/ | Helm chart with values and templates | \~8 | Application deployment |
+| policies/kyverno/ | Kyverno ClusterPolicy YAML | 2 | Kubernetes-native policies |
+| policies/opa/ | OPA Rego policy files | 2 | General-purpose policies |
+| .github/workflows/ | GitHub Actions workflow files | 6 | CI/CD pipelines |
+| bootstrap/ | Argo CD bootstrap application | 1 | GitOps entry point |
+| research/ | AI Security Collector (Python/FastAPI) | \~15 | AI-augmented monitoring |
+| docs/ | Project documentation | 50+ | Technical documentation |
+| scripts/ | Automation and setup scripts | \~10 | Build, deploy, and maintenance |
+| thesis/ | Academic thesis and report documents | 3 | Research deliverables |
+
+**Verification commands for evaluation evidence:**
+
+\# Count Kyverno rules  
+grep \-c "name:" policies/kyverno/\*.yaml
+
+\# Count OPA rules  
+grep \-c "deny\\|warn" policies/opa/\*.rego
+
+\# Count Falco custom rules  
+grep \-c "rule:" clusters/test-cluster/05-infrastructure/falco.yaml
+
+\# Count Prometheus alert rules  
+grep \-c "alert:" clusters/test-cluster/05-infrastructure/\*rules\*.yaml
+
+\# Count CI/CD workflow files  
+ls .github/workflows/\*.yml | wc \-l
+
+\# Count total YAML lines in workflows  
+wc \-l .github/workflows/\*.yml
+
+\# Verify SBOM generation in pipeline  
+grep \-n "syft\\|sbom\\|spdx\\|cyclonedx" .github/workflows/app-cicd.yml
+
+\# Verify Trivy blocking gate  
+grep \-n "exit-code\\|CRITICAL" .github/workflows/app-cicd.yml
+
+\# Check secret rotation audit log  
+cat docs/rotation-logs/rotation-history.md
+
+
+
