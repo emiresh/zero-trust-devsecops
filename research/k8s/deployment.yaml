@@ -27,6 +27,28 @@ spec:
       serviceAccountName: ai-security-collector
       automountServiceAccountToken: false  # CKV_K8S_38: Only mount when necessary
       
+      # Prefer scheduling on different node from Prometheus and Grafana
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - prometheus
+                  - grafana
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: ai-security-collector
+      
       containers:
       - name: collector
         image: emiresh/ai-security-collector:v1.0.28

@@ -7,6 +7,7 @@ metadata:
   namespace: {{ $.Values.namespace }}
   labels:
     app: {{ .name }}
+    app.kubernetes.io/part-of: {{ $.Values.app.name }}
 spec:
   replicas: {{ .replicaCount }}
   selector:
@@ -16,9 +17,18 @@ spec:
     metadata:
       labels:
         app: {{ .name }}
+        app.kubernetes.io/part-of: {{ $.Values.app.name }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/sealed-secret.yaml") . | sha256sum }}
     spec:
+      # Spread pods evenly across nodes to prevent overloading
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: {{ $.Values.app.name }}
       securityContext:
         {{- if .securityContext }}
         runAsNonRoot: {{ .securityContext.runAsNonRoot | default $.Values.defaults.securityContext.runAsNonRoot }}

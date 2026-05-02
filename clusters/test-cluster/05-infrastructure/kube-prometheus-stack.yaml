@@ -46,6 +46,28 @@ spec:
                 memory: 768Mi
                 cpu: 300m
 
+            # Spread monitoring pods across nodes
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                      - key: app.kubernetes.io/name
+                        operator: In
+                        values:
+                        - grafana
+                        - loki
+                    topologyKey: kubernetes.io/hostname
+            topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: monitoring
+
             # Service Monitor configuration
             serviceMonitorSelectorNilUsesHelmValues: false
             ruleSelectorNilUsesHelmValues: false
@@ -81,6 +103,21 @@ spec:
             limits:
               memory: 256Mi
               cpu: 100m
+
+          # Prefer scheduling on a different node from Prometheus
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                      - prometheus
+                      - loki
+                  topologyKey: kubernetes.io/hostname
 
           # Service configuration
           service:
@@ -185,6 +222,20 @@ spec:
                   resources:
                     requests:
                       storage: 2Gi
+
+            # Prefer scheduling on different node from Prometheus
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 50
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                      - key: app.kubernetes.io/name
+                        operator: In
+                        values:
+                        - prometheus
+                    topologyKey: kubernetes.io/hostname
 
             # Optimized based on actual usage: 1m CPU, 33Mi memory
             resources:
