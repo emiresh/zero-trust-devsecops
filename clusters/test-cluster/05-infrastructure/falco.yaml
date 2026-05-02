@@ -29,13 +29,13 @@ spec:
           enabled: true
           url: "http://falcosidekick:2801"
         
-        # Optimized based on actual usage: 5-8m CPU, 53-62Mi memory per node
+        # Optimized for low-resource cluster (1 CPU nodes)
         resources:
           requests:
-            cpu: 50m
+            cpu: 30m
             memory: 64Mi
           limits:
-            cpu: 200m
+            cpu: 150m
             memory: 128Mi
         
         # Falco rules configuration
@@ -329,7 +329,7 @@ spec:
               cpu: 100m
               memory: 64Mi
           
-          # Web UI configuration
+          # Web UI disabled to save resources (3 pods: 2 UI + 1 Redis)
           webui:
             enabled: true
           

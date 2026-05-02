@@ -34,7 +34,7 @@ defaults:
 
 deployments:
   - name: apigateway
-    replicaCount: 2
+    replicaCount: 1
     image:
       repository: docker.io/emiresh/freshbonds-api-gateway
       tag: v1.0.1
@@ -70,7 +70,7 @@ deployments:
         value: "8080"
 
   - name: frontend
-    replicaCount: 2
+    replicaCount: 1
     image:
       repository: docker.io/emiresh/freshbonds-frontend
       tag: v1.0.1
@@ -109,7 +109,7 @@ deployments:
         mountPath: /var/run
 
   - name: product-service
-    replicaCount: 2
+    replicaCount: 1
     image:
       repository: docker.io/emiresh/freshbonds-product-service
       tag: v1.0.1
@@ -148,7 +148,7 @@ deployments:
         value: "3002"
 
   - name: user-service
-    replicaCount: 2
+    replicaCount: 1
     image:
       repository: docker.io/emiresh/freshbonds-user-service
       tag: v1.0.1

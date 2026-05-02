@@ -24,8 +24,8 @@ spec:
           enabled: true
           prometheusSpec:
             replicas: 1
-            retention: 7d
-            retentionSize: 10GiB
+            retention: 3d
+            retentionSize: 5GiB
             
             # Storage configuration
             storageSpec:
@@ -37,14 +37,14 @@ spec:
                     requests:
                       storage: 10Gi
 
-            # Optimized based on actual usage: 14m CPU, 618Mi memory
+            # Optimized for low-resource cluster (1 CPU worker nodes)
             resources:
               requests:
-                memory: 700Mi
-                cpu: 50m
+                memory: 512Mi
+                cpu: 30m
               limits:
-                memory: 1Gi
-                cpu: 500m
+                memory: 768Mi
+                cpu: 300m
 
             # Service Monitor configuration
             serviceMonitorSelectorNilUsesHelmValues: false
@@ -73,13 +73,13 @@ spec:
             storageClassName: local-path
             size: 5Gi
             
-          # Optimized based on actual usage: 3m CPU, 242Mi memory
+          # Optimized for low-resource cluster
           resources:
             requests:
-              memory: 256Mi
-              cpu: 25m
+              memory: 128Mi
+              cpu: 15m
             limits:
-              memory: 512Mi
+              memory: 256Mi
               cpu: 100m
 
           # Service configuration
@@ -215,6 +215,15 @@ spec:
         # Kube State Metrics configuration
         kubeStateMetrics:
           enabled: true
+
+        kube-state-metrics:
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
 
         # Component monitoring settings
         coreDns:
