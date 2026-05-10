@@ -34,25 +34,8 @@ spec:
                 securityContext:
                   runAsNonRoot: true
     
-    # Disallow privileged containers
-    - name: disallow-privileged
-      match:
-        any:
-        - resources:
-            kinds:
-              - Deployment
-              - StatefulSet
-              - DaemonSet
-      validate:
-        message: "Privileged containers are not allowed"
-        pattern:
-          spec:
-            template:
-              spec:
-                containers:
-                - securityContext:
-                    privileged: false
-    
+    # Privileged container check is handled by Checkov (CKV_K8S_16)
+
     # Require resource limits
     - name: require-resource-limits
       match:

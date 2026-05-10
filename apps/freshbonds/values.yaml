@@ -18,9 +18,9 @@ defaults:
     runAsNonRoot: true
     runAsUser: 1000
     fsGroup: 1000
-    privileged: true
+    privileged: false
     allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
+    readOnlyRootFilesystem: false
     capabilities:
       drop:
         - ALL

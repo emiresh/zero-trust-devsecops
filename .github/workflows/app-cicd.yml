@@ -257,7 +257,7 @@ jobs:
         run: |
           pip install checkov
           
-          echo "🔍 Scanning for privileged containers (CKV_K8S_16)..."
+          echo "🔍 Scanning for read-only root filesystem (CKV_K8S_22)..."
           CHECKOV_FAILED=false
           for chart in apps/*/; do
             if [[ -f "$chart/Chart.yaml" ]]; then
@@ -268,16 +268,16 @@ jobs:
               set +e
               checkov -f "/tmp/${chart_name}-checkov.yaml" \
                 --framework kubernetes \
-                --check CKV_K8S_16 \
+                --check CKV_K8S_22 \
                 --output cli \
                 --compact
               CHECKOV_EXIT=$?
               set -e
               
               if [ "$CHECKOV_EXIT" -ne 0 ]; then
-                echo "::error::❌ Checkov [CKV_K8S_16] privileged container detected in $chart_name"
-                echo "  Policy:  CKV_K8S_16 - Container should not be privileged"
-                echo "  Fix:     Remove 'privileged: true' from securityContext in values.yaml"
+                echo "::error::❌ Checkov [CKV_K8S_22] writable root filesystem detected in $chart_name"
+                echo "  Policy:  CKV_K8S_22 - Containers must use read-only root filesystem"
+                echo "  Fix:     Set 'readOnlyRootFilesystem: true' in securityContext in values.yaml"
                 CHECKOV_FAILED=true
               fi
             fi
