@@ -58,18 +58,6 @@ deployments:
         periodSeconds: 10
         timeoutSeconds: 3
         failureThreshold: 3
-    # ⚠️ DEMO: intentional Kyverno policy violations
-    securityContext:
-      runAsNonRoot: false           # ❌ violates run-as-non-root policy
-      runAsUser: 0                  # ❌ running as root
-      privileged: true              # ❌ violates disallow-privileged policy
-      allowPrivilegeEscalation: true  # ❌ violates disallow-privilege-escalation policy
-      readOnlyRootFilesystem: false
-      capabilities:
-        drop: []                    # ❌ violates drop-all-capabilities policy
-    resources:
-      limits: {}                    # ❌ violates require-resource-limits policy
-      requests: {}
     envFrom:
       - secretRef:
           name: freshbonds-secret
