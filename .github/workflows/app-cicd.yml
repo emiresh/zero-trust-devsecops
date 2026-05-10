@@ -527,11 +527,13 @@ jobs:
           echo "| Update Manifests | ${{ needs.update-manifests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [[ "${{ needs.build-and-scan.result }}" == "success" ]]; then
+          if [[ "${{ needs.policy-checks.result }}" == "failure" ]] || \
+             [[ "${{ needs.build-and-scan.result }}" == "failure" ]] || \
+             [[ "${{ needs.update-manifests.result }}" == "failure" ]]; then
+            echo "❌ Pipeline failed - review security findings above" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
             echo "✅ **Zero-Trust Security**: All security gates passed!" >> $GITHUB_STEP_SUMMARY
             echo "✅ **Left-Shift Security**: Vulnerabilities caught before deployment" >> $GITHUB_STEP_SUMMARY
             exit 0
-          else
-            echo "❌ Pipeline failed - review security findings above" >> $GITHUB_STEP_SUMMARY
-            exit 1
           fi
