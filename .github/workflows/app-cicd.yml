@@ -51,6 +51,7 @@ jobs:
     outputs:
       services: ${{ steps.detect.outputs.services }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
+      policy_only: ${{ steps.detect.outputs.policy_only }}
     
     steps:
       - name: Checkout Code
@@ -102,6 +103,16 @@ jobs:
             SERVICES=("frontend" "api-gateway" "user-service" "product-service")
           fi
           
+          # If Helm values/templates/policies changed, run policy checks on all services
+          POLICY_ONLY="false"
+          if echo "$CHANGED_FILES" | grep -qE "^(apps/|policies/)"; then
+            echo "⚠️ Helm values, templates or policies changed - running policy checks"
+            if [[ ${#SERVICES[@]} -eq 0 ]]; then
+              POLICY_ONLY="true"
+              SERVICES=("frontend" "api-gateway" "user-service" "product-service")
+            fi
+          fi
+          
           # Create JSON array
           if [[ ${#SERVICES[@]} -eq 0 ]]; then
             echo "ℹ️ No services to build"
@@ -125,6 +136,7 @@ jobs:
           
           echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+          echo "policy_only=$POLICY_ONLY" >> $GITHUB_OUTPUT
 
   # ==========================================
   # STAGE 2: LEFT-SHIFT SECURITY - Kubernetes Manifest Validation
@@ -282,6 +294,7 @@ jobs:
     if: |
       always() &&
       needs.detect-changes.outputs.has_changes == 'true' &&
+      needs.detect-changes.outputs.policy_only != 'true' &&
       (needs.policy-checks.result == 'success' || needs.policy-checks.result == 'skipped')
     
     permissions:
