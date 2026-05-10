@@ -245,12 +245,32 @@ jobs:
         run: |
           pip install checkov
           
-          echo "🔍 Scanning Kubernetes manifests..."
-          checkov -d apps \
-            --config-file .checkov.yaml \
-            --framework kubernetes \
-            --output cli \
-            --compact || true
+          echo "🔍 Scanning for privileged containers (CKV_K8S_16)..."
+          CHECKOV_FAILED=false
+          for chart in apps/*/; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              chart_name=$(basename "$chart")
+              echo "📦 Checking $chart_name..."
+              helm template "$chart_name" "$chart" > "/tmp/${chart_name}-checkov.yaml" 2>/dev/null || continue
+              
+              set +e
+              checkov -f "/tmp/${chart_name}-checkov.yaml" \
+                --framework kubernetes \
+                --check CKV_K8S_16 \
+                --output cli \
+                --compact
+              CHECKOV_EXIT=$?
+              set -e
+              
+              if [ "$CHECKOV_EXIT" -ne 0 ]; then
+                echo "::error::❌ Checkov [CKV_K8S_16] privileged container detected in $chart_name"
+                echo "  Policy:  CKV_K8S_16 - Container should not be privileged"
+                echo "  Fix:     Remove 'privileged: true' from securityContext in values.yaml"
+                CHECKOV_FAILED=true
+              fi
+            fi
+          done
+          if [ "$CHECKOV_FAILED" = "true" ]; then exit 1; fi
 
   # ==========================================
   # STAGE 3: LEFT-SHIFT SECURITY - Build, Scan, SBOM
