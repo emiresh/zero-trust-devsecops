@@ -7,13 +7,7 @@ deny contains msg if {
     msg := sprintf("Deployment %s must set securityContext.runAsNonRoot = true", [input.metadata.name])
 }
 
-# Deny privileged containers
-deny contains msg if {
-    input.kind == "Deployment"
-    container := input.spec.template.spec.containers[_]
-    container.securityContext.privileged == true
-    msg := sprintf("Container %s in deployment %s cannot run in privileged mode", [container.name, input.metadata.name])
-}
+# NOTE: Privileged container check is handled by Checkov (CKV_K8S_16)
 
 # Require resource limits
 deny contains msg if {
