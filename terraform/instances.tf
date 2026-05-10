@@ -22,7 +22,7 @@ locals {
       boot_volume_type                    = "PARAVIRTUALIZED"
       firmware                            = "UEFI_64"
       is_consistent_volume_naming_enabled = true
-      is_pv_encryption_in_transit_enabled = false
+      is_pv_encryption_in_transit_enabled = true
       network_type                        = "PARAVIRTUALIZED"
       remote_data_volume_type             = "PARAVIRTUALIZED"
     }
