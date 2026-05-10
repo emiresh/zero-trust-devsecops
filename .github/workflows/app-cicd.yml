@@ -199,16 +199,13 @@ jobs:
               
               # Run kyverno and capture full output for display
               KYVERNO_OUTPUT=$(kyverno apply policies/kyverno/*.yaml \
-                --resource "/tmp/${chart_name}.yaml" \
-                -o table 2>&1)
+                --resource "/tmp/${chart_name}.yaml" 2>&1)
               KYVERNO_EXIT=$?
               echo "$KYVERNO_OUTPUT"
               
               if [ "$KYVERNO_EXIT" -ne 0 ]; then
-                # Extract and highlight the failed rules
                 echo ""
-                echo "::error::❌ Kyverno policy violations in $chart_name:"
-                echo "$KYVERNO_OUTPUT" | grep -E "FAIL|fail" || true
+                echo "::error::❌ Kyverno policy violations in $chart_name - see output above"
                 KYVERNO_FAILED=true
               fi
               echo ""
