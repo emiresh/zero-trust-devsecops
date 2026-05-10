@@ -3,6 +3,7 @@
 
 # Sealed Secrets - encrypted, safe to commit
 clusters/test-cluster/10-apps/admin-user-sealedsecret.yaml:generic-api-key:14
+apps/freshbonds/templates/sealed-secret.yaml:generic-api-key:11
 apps/freshbonds/templates/sealed-secret.yaml:generic-api-key:12
 apps/freshbonds/templates/sealed-secret.yaml:generic-api-key:15
 clusters/test-cluster/05-infrastructure/alertmanager-pagerduty-sealedsecret.yaml:generic-api-key:9

@@ -155,15 +155,16 @@ jobs:
           fi
           
           # Scan (automatically uses .gitleaksignore in repo root)
-          gitleaks detect --no-git --verbose 2>&1 | tee gitleaks-output.txt || true
-          
-          # Check for actual leaks (not "no leaks found")
-          if grep -qE "WRN leaks found: [1-9]" gitleaks-output.txt; then
-            echo "::error::❌ Secrets detected in PR!"
-            cat gitleaks-output.txt
+          # Note: gitleaks exits with code 1 when leaks are found - capture it properly
+          gitleaks detect --no-git --verbose 2>&1 | tee gitleaks-output.txt
+          GITLEAKS_EXIT=${PIPESTATUS[0]}
+
+          # Check exit code directly (most reliable) + pattern as backup
+          if [ "$GITLEAKS_EXIT" -ne 0 ] || grep -qE "WRN leaks found: [0-9]+" gitleaks-output.txt; then
+            echo "::error::❌ Secrets detected in PR! See findings above."
             exit 1
           fi
-          
+
           echo "✅ No secrets found"
 
       - name: Basic Kubernetes Manifest Validation
