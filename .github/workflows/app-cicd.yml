@@ -207,7 +207,7 @@ jobs:
                 echo "::error::❌ Kyverno policy violations detected in $chart_name"
                 echo "── Violation Details ──────────────────────────────────"
                 # Check each known policy rule against the rendered manifest
-                if grep -q "pullPolicy: Never" "/tmp/${chart_name}.yaml" 2>/dev/null; then
+                if grep -q "imagePullPolicy: Never" "/tmp/${chart_name}.yaml" 2>/dev/null; then
                   echo "  ❌ Policy:  image-verification"
                   echo "     Rule:    require-image-pull-policy"
                   echo "     Message: imagePullPolicy 'Never' is not allowed."
