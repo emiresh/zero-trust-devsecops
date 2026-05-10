@@ -197,15 +197,14 @@ jobs:
               
               helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
               
-              # Run kyverno and capture full output for display
-              KYVERNO_OUTPUT=$(kyverno apply policies/kyverno/*.yaml \
-                --resource "/tmp/${chart_name}.yaml" 2>&1)
+              # Run directly (no subshell) so all output is visible in logs
+              set +e
+              kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml"
               KYVERNO_EXIT=$?
-              echo "$KYVERNO_OUTPUT"
+              set -e
               
               if [ "$KYVERNO_EXIT" -ne 0 ]; then
-                echo ""
-                echo "::error::❌ Kyverno policy violations in $chart_name - see output above"
+                echo "::error::❌ Kyverno policy violations in $chart_name"
                 KYVERNO_FAILED=true
               fi
               echo ""
