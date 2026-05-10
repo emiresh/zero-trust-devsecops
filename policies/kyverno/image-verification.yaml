@@ -23,13 +23,14 @@ spec:
               - StatefulSet
               - DaemonSet
       validate:
-        message: "Using 'latest' tag is not allowed. Use specific version tags."
-        pattern:
-          spec:
-            template:
-              spec:
-                containers:
-                - image: "!*:latest"
+        message: "Using 'latest' tag is not allowed. Use specific version tags (e.g. v1.0.4)."
+        deny:
+          conditions:
+            any:
+            - key: "{{ request.object.spec.template.spec.containers[].image | join(',', @) }}"
+              operator: AnyIn
+              value:
+              - "*:latest"
     
     # Require images from approved registries
     - name: require-approved-registry
