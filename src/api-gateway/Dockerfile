@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:14-alpine
 
 # Install dumb-init and upgrade OpenSSL to patch CVE-2025-15467, CVE-2025-69419, CVE-2025-69421
 RUN apk add --no-cache dumb-init && \
