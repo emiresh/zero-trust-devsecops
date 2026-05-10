@@ -38,7 +38,7 @@ deployments:
     image:
       repository: docker.io/emiresh/freshbonds-api-gateway
       tag: v1.0.5
-      pullPolicy: Never  # ⚠️ DEMO: Kyverno-only violation - OPA has no pullPolicy rule
+      pullPolicy: IfNotPresent
     service:
       name: apigateway-service
       port: 8080
