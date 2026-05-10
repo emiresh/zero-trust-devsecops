@@ -37,7 +37,7 @@ deployments:
     replicaCount: 1
     image:
       repository: docker.io/emiresh/freshbonds-api-gateway
-      tag: v1.0.4
+      tag: latest  # ⚠️ DEMO: intentional violation - triggers OPA + Kyverno disallow-latest-tag rule
       pullPolicy: IfNotPresent
     service:
       name: apigateway-service

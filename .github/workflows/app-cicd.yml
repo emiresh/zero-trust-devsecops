@@ -155,16 +155,23 @@ jobs:
           curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
           
           # Render and test Helm charts
+          OPA_FAILED=false
           for chart in apps/*/; do
             if [[ -f "$chart/Chart.yaml" ]]; then
               chart_name=$(basename "$chart")
               echo "📦 Testing: $chart_name"
               
               helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
-              conftest test --policy ./policies/opa "/tmp/${chart_name}.yaml" || true
+              conftest test --policy ./policies/opa "/tmp/${chart_name}.yaml"
+              CONFTEST_EXIT=${PIPESTATUS[0]}
+              if [ "$CONFTEST_EXIT" -ne 0 ]; then
+                echo "::error::❌ OPA policy violation in $chart_name"
+                OPA_FAILED=true
+              fi
               echo ""
             fi
           done
+          if [ "$OPA_FAILED" = "true" ]; then exit 1; fi
 
       - name: Validate with Kyverno (Admission Control)
         if: hashFiles('policies/kyverno/**') != ''
@@ -180,16 +187,23 @@ jobs:
           curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash > /dev/null 2>&1
           
           # Test Helm templates
+          KYVERNO_FAILED=false
           for chart in apps/*/; do
             if [[ -f "$chart/Chart.yaml" ]]; then
               chart_name=$(basename "$chart")
               echo "📦 Testing $chart_name with Kyverno..."
               
               helm template "$chart_name" "$chart" > "/tmp/${chart_name}.yaml" 2>/dev/null || continue
-              kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml" || true
+              kyverno apply policies/kyverno/*.yaml --resource "/tmp/${chart_name}.yaml"
+              KYVERNO_EXIT=$?
+              if [ "$KYVERNO_EXIT" -ne 0 ]; then
+                echo "::error::❌ Kyverno policy violation in $chart_name"
+                KYVERNO_FAILED=true
+              fi
               echo ""
             fi
           done
+          if [ "$KYVERNO_FAILED" = "true" ]; then exit 1; fi
 
       - name: Scan Kubernetes Manifests with Checkov
         run: |
