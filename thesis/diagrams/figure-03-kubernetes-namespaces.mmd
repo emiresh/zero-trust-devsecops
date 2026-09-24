@@ -1,0 +1,57 @@
+graph TB
+    subgraph "Kubernetes Cluster (1.28.15)"
+        subgraph "argocd namespace"
+            ARGO_S[Argo CD Server]
+            ARGO_C[Application Controller]
+            ARGO_R[Repo Server]
+        end
+
+        subgraph "dev namespace"
+            D_GW[API Gateway Pod]
+            D_US[User Service Pod]
+            D_PS[Product Service Pod]
+            D_FE[Frontend Pod]
+            D_SEC[SealedSecret]
+            D_CM[ConfigMap]
+        end
+
+        subgraph "monitoring namespace"
+            M_PROM[Prometheus]
+            M_GRAF[Grafana]
+            M_LOKI[Loki]
+            M_TAIL[Promtail DaemonSet]
+            M_AM[AlertManager]
+        end
+
+        subgraph "falco namespace"
+            F_FALCO[Falco DaemonSet<br/>eBPF Driver]
+            F_SDK[Falcosidekick]
+        end
+
+        subgraph "sealed-secrets namespace"
+            SS[SealedSecrets<br/>Controller]
+        end
+
+        subgraph "ingress-nginx namespace"
+            ING_C[NGINX Ingress<br/>Controller]
+        end
+
+        subgraph "cert-manager namespace"
+            CM[cert-manager<br/>Let's Encrypt]
+        end
+
+        subgraph "ai-security namespace"
+            AI_C[AI Security<br/>Collector]
+        end
+    end
+
+    ARGO_S --> D_GW
+    ARGO_S --> D_US
+    ARGO_S --> D_PS
+    ARGO_S --> D_FE
+    ING_C --> D_GW
+    F_FALCO --> F_SDK
+    F_SDK --> AI_C
+    F_SDK --> M_LOKI
+    M_TAIL --> M_LOKI
+    M_PROM --> M_AM

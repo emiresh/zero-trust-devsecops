@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant Dev as Developer
+    participant GH as GitHub
+    participant GA as GitHub Actions
+    participant DH as Docker Hub
+    participant Git as Git Repository
+    participant Argo as Argo CD
+    participant K8s as Kubernetes
+
+    Dev->>GH: Push to feature branch
+    GH->>GA: Trigger PR Validation
+    GA-->>GH: ✓ Validation passed
+    Dev->>GH: Merge to main
+    GH->>GA: Trigger App CI/CD
+    GA->>GA: Policy validation (OPA + Kyverno)
+    GA->>GA: Docker build (multi-arch)
+    GA->>GA: Trivy scan + SBOM generation
+    GA->>DH: Push images (v1.x.x)
+    GA->>Git: Update values.yaml (new tag)
+    Git-->>Argo: Detect config drift
+    Argo->>K8s: Sync new image tags
+    K8s->>K8s: Rolling update pods
+    K8s-->>Argo: ✓ Healthy

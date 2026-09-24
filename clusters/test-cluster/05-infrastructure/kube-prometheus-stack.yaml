@@ -1,0 +1,339 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: monitoring
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 65.1.1
+    chart: kube-prometheus-stack
+    helm:
+      values: |
+        # Global configuration
+        global:
+          scrapeInterval: 30s
+          scrapeTimeout: 10s
+          evaluationInterval: 30s
+
+        # Prometheus configuration
+        prometheus:
+          enabled: true
+          prometheusSpec:
+            replicas: 1
+            retention: 3d
+            retentionSize: 5GiB
+            
+            # Storage configuration
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: local-path
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+
+            # Optimized for low-resource cluster (1 CPU worker nodes)
+            resources:
+              requests:
+                memory: 512Mi
+                cpu: 30m
+              limits:
+                memory: 768Mi
+                cpu: 300m
+
+            # Spread monitoring pods across nodes
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                      - key: app.kubernetes.io/name
+                        operator: In
+                        values:
+                        - grafana
+                        - loki
+                    topologyKey: kubernetes.io/hostname
+            topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: monitoring
+
+            # Service Monitor configuration
+            serviceMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+
+            # External URL for your domain
+            externalUrl: http://prometheus.k8.publicvm.com
+
+          # Ingress configuration for Prometheus
+          ingress:
+            enabled: false
+
+        # Grafana configuration
+        grafana:
+          enabled: true
+          
+          # Admin credentials
+          adminUser: admin
+          adminPassword: admin123
+          
+          # Persistence
+          persistence:
+            enabled: true
+            storageClassName: local-path
+            size: 5Gi
+            
+          # Optimized for low-resource cluster
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 15m
+            limits:
+              memory: 256Mi
+              cpu: 100m
+
+          # Prefer scheduling on a different node from Prometheus
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                      - prometheus
+                      - loki
+                  topologyKey: kubernetes.io/hostname
+
+          # Service configuration
+          service:
+            type: ClusterIP
+            
+          # Ingress configuration
+          ingress:
+            enabled: false
+
+          # Grafana configuration
+          grafana.ini:
+            server:
+              root_url: http://grafana.k8.publicvm.com
+              serve_from_sub_path: false
+            security:
+              allow_embedding: true
+              cookie_secure: false
+            auth.anonymous:
+              enabled: true
+              org_role: Viewer
+
+        # AlertManager configuration
+        alertmanager:
+          enabled: true
+          
+          # AlertManager configuration
+          # Note: PagerDuty integration key is stored in a Kubernetes Secret for security
+          # Secret name: alertmanager-pagerduty-key (namespace: monitoring)
+          config:
+            global:
+              resolve_timeout: 5m
+              pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+            
+            route:
+              group_by: ['alertname', 'cluster', 'service']
+              group_wait: 10s
+              group_interval: 10s
+              repeat_interval: 12h
+              receiver: 'pagerduty-notifications'
+              routes:
+                - match:
+                    alertname: Watchdog
+                  receiver: 'null'
+                - match:
+                    severity: critical
+                  receiver: 'pagerduty-critical'
+                  continue: false
+                - match:
+                    severity: warning
+                  receiver: 'pagerduty-notifications'
+                  continue: false
+            
+            receivers:
+              - name: 'null'
+              
+              - name: 'pagerduty-critical'
+                pagerduty_configs:
+                  - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
+                    severity: critical
+                    description: '{{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}Falco Security Alert: {{ .CommonLabels.alertname }}{{ end }}'
+                    details:
+                      firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      num_firing: '{{ .Alerts.Firing | len }}'
+                      num_resolved: '{{ .Alerts.Resolved | len }}'
+                      cluster: '{{ .CommonLabels.cluster }}'
+                      namespace: '{{ .CommonLabels.namespace }}'
+                      pod: '{{ .CommonLabels.pod }}'
+                      severity: '{{ .CommonLabels.severity }}'
+              
+              - name: 'pagerduty-notifications'
+                pagerduty_configs:
+                  - routing_key_file: /etc/alertmanager/secrets/alertmanager-pagerduty-key/integration-key
+                    severity: warning
+                    description: '{{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}Falco Security Alert: {{ .CommonLabels.alertname }}{{ end }}'
+                    details:
+                      firing: '{{ range .Alerts.Firing }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      resolved: '{{ range .Alerts.Resolved }}{{ .Labels.alertname }}: {{ .Annotations.description }}{{ end }}'
+                      num_firing: '{{ .Alerts.Firing | len }}'
+                      num_resolved: '{{ .Alerts.Resolved | len }}'
+                      cluster: '{{ .CommonLabels.cluster }}'
+                      namespace: '{{ .CommonLabels.namespace }}'
+                      pod: '{{ .CommonLabels.pod }}'
+                      severity: '{{ .CommonLabels.severity }}'
+            
+            templates:
+              - '/etc/alertmanager/config/*.tmpl'
+          
+          alertmanagerSpec:
+            replicas: 1
+            
+            # Mount the secret containing PagerDuty integration key
+            secrets:
+              - alertmanager-pagerduty-key
+            
+            # Storage configuration
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: local-path
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 2Gi
+
+            # Prefer scheduling on different node from Prometheus
+            affinity:
+              podAntiAffinity:
+                preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 50
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                      - key: app.kubernetes.io/name
+                        operator: In
+                        values:
+                        - prometheus
+                    topologyKey: kubernetes.io/hostname
+
+            # Optimized based on actual usage: 1m CPU, 33Mi memory
+            resources:
+              requests:
+                memory: 64Mi
+                cpu: 10m
+              limits:
+                memory: 128Mi
+                cpu: 100m
+
+            # External URL for your domain
+            externalUrl: http://alertmanager.k8.publicvm.com
+
+          # Service configuration
+          service:
+            type: ClusterIP
+
+          # Ingress configuration for AlertManager
+          ingress:
+            enabled: false
+
+        # Node Exporter configuration
+        nodeExporter:
+          enabled: true
+          serviceMonitor:
+            enabled: true
+
+        # Kube State Metrics configuration
+        kubeStateMetrics:
+          enabled: true
+
+        kube-state-metrics:
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+
+        # Component monitoring settings
+        coreDns:
+          enabled: true
+
+        kubelet:
+          enabled: true
+          serviceMonitor:
+            https: true
+
+        kubeControllerManager:
+          enabled: true
+
+        kubeScheduler:
+          enabled: true
+
+        kubeProxy:
+          enabled: true
+
+        kubeEtcd:
+          enabled: true
+
+        # Prometheus Operator configuration
+        prometheusOperator:
+          enabled: true
+          # Optimized based on actual usage: 1m CPU, 32Mi memory
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 10m
+            limits:
+              memory: 128Mi
+              cpu: 100m
+
+        # Default alerting rules
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: true               # Fixed typo: was "ture"
+            general: true
+            k8s: true
+            kubeApiserverAvailability: true
+            kubelet: true
+            kubernetesApps: true     # Pod crashes, restarts, OOMKills
+            kubernetesResources: true # CPU/Memory overcommit
+            kubernetesStorage: true  # PVC and storage issues
+            kubernetesSystem: true   # System component failures
+            node: true               # Node disk, memory, CPU issues
+            prometheus: true
+            prometheusOperator: false # Disable operator alerts
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

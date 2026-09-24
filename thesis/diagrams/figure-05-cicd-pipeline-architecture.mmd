@@ -1,0 +1,54 @@
+graph TB
+    DEV[Developer] -->|push| PR_V
+
+    subgraph "Pipeline 1: PR Validation (< 2 min)"
+        PR_V[Pull Request] --> LINT[ESLint + yamllint]
+        PR_V --> GL[Gitleaks<br/>Secret Scan]
+        PR_V --> KV[kubeval<br/>K8s Validation]
+        PR_V --> TF_F[Terraform fmt<br/>Format Check]
+        PR_V --> ANTI[Security<br/>Anti-Patterns]
+        PR_V --> SIZE[PR Size<br/>Analysis]
+    end
+
+    PR_V -->|merge| MAIN[main branch]
+
+    subgraph "Pipeline 2: App CI/CD (8-10 min)"
+        MAIN --> DET[Detect Changes]
+        DET --> POL[Policy Validation<br/>OPA + Kyverno CLI]
+        POL -->|pass| BLD[Docker Build<br/>Multi-Arch<br/>amd64 + arm64]
+        BLD --> SBOM_G[Syft SBOM<br/>SPDX + CycloneDX]
+        BLD --> TRIVY_V[Trivy CVE Scan<br/>CRITICAL = Block]
+        BLD --> TRIVY_S[Trivy Secret Scan<br/>Embedded Secrets = Block]
+        BLD --> CHK[Checkov<br/>K8s Manifest Scan]
+        TRIVY_V -->|pass| PUSH[Push to<br/>Docker Hub]
+        PUSH --> GITOPS[Update<br/>values.yaml]
+        GITOPS --> ARGOCD_S[Argo CD<br/>Auto-Sync]
+    end
+
+    subgraph "Pipeline 3: Terraform (2-4 min)"
+        TF_CH[terraform/** change] --> TF_VAL[Validate + Format]
+        TF_VAL --> TF_CHK[Checkov IaC Scan]
+        TF_CHK --> TF_PLAN[Plan Preview]
+        TF_PLAN --> TF_APP[Manual Approval<br/>→ Apply]
+    end
+
+    subgraph "Pipeline 4: Security Scan (Monthly)"
+        CRON1[1st of Month<br/>2 AM UTC] --> IMG_S[Trivy All Images]
+        CRON1 --> DEP_S[npm audit<br/>Dependencies]
+        CRON1 --> POL_S[Policy Compliance<br/>OPA + Kyverno]
+        CRON1 --> IAC_S[Checkov IaC Audit]
+    end
+
+    subgraph "Pipeline 5: Secret Rotation (Monthly)"
+        CRON2[1st of Month<br/>3 AM UTC] --> GEN[Generate Secrets<br/>openssl rand]
+        GEN --> UPD[Update External<br/>MongoDB Atlas API]
+        UPD --> KSEAL[kubeseal Encrypt]
+        KSEAL --> COMMIT[Git Commit<br/>SealedSecret]
+        COMMIT --> VERIFY[Health Check<br/>Verification]
+    end
+
+    subgraph "Pipeline 6: AI Collector CI/CD (5-8 min)"
+        RES_CH[research/** change] --> AI_BLD[Docker Build]
+        AI_BLD --> AI_SCAN[Trivy + SBOM]
+        AI_SCAN --> AI_PUSH[Push + Deploy]
+    end

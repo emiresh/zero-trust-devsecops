@@ -1,0 +1,45 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-security-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+  - name: falco-security
+    interval: 30s
+    rules:
+    # Falco pod health
+    - alert: FalcoDown
+      expr: up{job="falco"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: security
+      annotations:
+        summary: "Falco security monitoring is down"
+        description: "Falco has been down for more than 5 minutes on {{ $labels.instance }}"
+    
+    # Falco high event rate (possible attack)
+    - alert: FalcoHighEventRate
+      expr: rate(falco_events_total[5m]) > 100
+      for: 5m
+      labels:
+        severity: warning
+        component: security
+      annotations:
+        summary: "High rate of Falco security events"
+        description: "Falco is detecting {{ $value }} events/second (threshold: 100/s) - possible security incident"
+    
+    # Falco dropped events
+    - alert: FalcoDroppedEvents
+      expr: rate(falco_events_dropped_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: security
+      annotations:
+        summary: "Falco is dropping events"
+        description: "Falco is dropping {{ $value }} events/second - may be under load"

@@ -1,0 +1,48 @@
+# Secrets
+secrets/
+sealed-secrets-keys-backup.yaml
+*sealed-secrets-keys*.yaml
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.npm
+.yarn
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Security scanning outputs
+gitleaks-output.txt
+trivy-results.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Docker
+.docker/
+
+# Logs
+logs/
+*.log

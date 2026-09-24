@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zero-Trust DevSecOps: A Kubernetes Microservices Reference Implementation</title>
+<meta name="description" content="A reproducible, open-source Zero-Trust DevSecOps framework for Kubernetes microservices, evaluated against NIST SP 800-207 and MITRE ATT&CK for Containers.">
+<style>
+  :root{
+    --bg:#fbfbfa; --panel:#ffffff; --ink:#1c1c1e; --muted:#5b5f66;
+    --line:#e6e4df; --accent:#1f5f4f; --accent-ink:#ffffff;
+    --code-bg:#f4f2ec; --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14161a; --panel:#1b1e23; --ink:#eceef0; --muted:#9aa1ab;
+      --line:#2b2f36; --accent:#5fd4ac; --accent-ink:#0b1210;
+      --code-bg:#10131a; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:0 20px}
+  header.hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+  .kicker{
+    display:inline-block;font-size:12.5px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:clamp(28px,4vw,40px);line-height:1.15;margin:0 0 18px;letter-spacing:-.01em}
+  .byline{color:var(--muted);font-size:15px;margin:0 0 22px}
+  .byline strong{color:var(--ink)}
+  .links{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;
+    font-size:14px;font-weight:600;text-decoration:none;border:1px solid var(--line);
+    color:var(--ink);background:var(--panel);transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .btn:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+  section{padding:44px 0;border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:none}
+  h2{font-size:22px;margin:0 0 18px;letter-spacing:-.01em}
+  p{margin:0 0 14px;color:var(--ink)}
+  .lede{font-size:18px;color:var(--muted);max-width:760px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:20px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 22px;
+  }
+  .card h3{margin:0 0 8px;font-size:15.5px}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+  ol.contrib{padding-left:22px;margin:0}
+  ol.contrib li{margin-bottom:12px;color:var(--ink)}
+  ol.contrib li b{display:block;font-size:15px;margin-bottom:2px}
+  ol.contrib li span{color:var(--muted);font-size:14.5px}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+  td:last-child,th:last-child{text-align:right}
+  figure{margin:24px 0 0;text-align:center}
+  figure img{max-width:100%;border-radius:10px;border:1px solid var(--line);background:#fff}
+  figcaption{margin-top:10px;font-size:13.5px;color:var(--muted)}
+  .stack-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .pill{
+    font-size:13px;padding:5px 12px;border-radius:999px;background:var(--code-bg);
+    color:var(--ink);border:1px solid var(--line);
+  }
+  .bibtex{
+    background:var(--code-bg);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13px;line-height:1.55;overflow-x:auto;color:var(--ink);white-space:pre;
+  }
+  footer{padding:36px 0 60px;color:var(--muted);font-size:13.5px}
+  footer a{color:var(--muted)}
+  a{color:var(--accent)}
+  .license-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px}
+  .two-col{display:grid;grid-template-columns:1.1fr .9fr;gap:28px}
+  @media (max-width:700px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="kicker">Master of Information Security &middot; UCSC &middot; 2026</span>
+    <h1>Automating Continuous Compliance in DevSecOps Through Zero Trust</h1>
+    <p class="byline">A Kubernetes Microservices Reference Implementation &mdash;
+      <strong>EMIM Ekanayaka</strong>, University of Colombo School of Computing (UCSC).
+      Supervisor: Roshan N. Rajapakse.</p>
+    <p class="lede">A reproducible, open-source framework that operationalises NIST Zero Trust
+      Architecture as automated controls across the full delivery lifecycle of a Kubernetes
+      microservices application &mdash; evaluated against NIST&nbsp;SP&nbsp;800-207 and the
+      MITRE ATT&amp;CK for Containers matrix.</p>
+    <div class="links">
+      <a class="btn primary" href="thesis/ieee-paper/paper.pdf">Read the paper (PDF)</a>
+      <a class="btn" href="thesis/FINAL_REPORT.pdf">Full thesis report (PDF)</a>
+      <a class="btn" href="https://github.com/emiresh/zero-trust-devsecops">View source on GitHub</a>
+    </div>
+  </header>
+
+  <section id="abstract">
+    <h2>Abstract</h2>
+    <p>Cloud-native application development has transformed how organisations build and operate
+      software systems, but the rapid adoption of Kubernetes-based microservices has outpaced
+      traditional approaches for verifying infrastructure, application, and runtime security
+      controls. Perimeter-based security models, which rely on implicit trust within network
+      boundaries, are incompatible with the dynamic and distributed nature of containerised
+      environments. This work designs, implements, and evaluates a Zero-Trust DevSecOps framework
+      for a Kubernetes-based microservices application, <em>FreshBonds</em>, using the Design
+      Science Research Methodology. The framework integrates infrastructure as code, GitOps-driven
+      deployment, dual-engine policy-as-code enforcement, container vulnerability scanning,
+      automated secret lifecycle management, eBPF-based runtime threat detection, and AI-assisted
+      incident enrichment &mdash; deployed on a production-grade three-node Kubernetes cluster on
+      Oracle Cloud Infrastructure.</p>
+  </section>
+
+  <section id="novelty">
+    <h2>Research Contribution and Novelty</h2>
+    <p class="lede">The novelty is the integrated artefact, not any individual tool. Trivy, Kyverno,
+      Falco, and Argo&nbsp;CD are each well studied in isolation; the contribution here is
+      connecting them into a single, evidence-generating continuous-compliance pipeline and
+      evaluating it as a whole against Zero Trust tenets and MITRE ATT&amp;CK coverage.</p>
+    <ol class="contrib">
+      <li><b>Reproducible reference implementation.</b>
+        <span>A production-deployed Zero-Trust DevSecOps framework for Kubernetes microservices.</span></li>
+      <li><b>Lifecycle-based continuous compliance model.</b>
+        <span>Connects PR validation, CI/CD scanning, GitOps deployment, scheduled audits, secret
+          rotation, runtime detection, and incident reporting into one pipeline.</span></li>
+      <li><b>Dual policy-as-code design.</b>
+        <span>Kyverno + Open Policy Agent together give broader control coverage than either
+          engine alone.</span></li>
+      <li><b>Supply-chain evidence model.</b>
+        <span>Dual-format SBOM generation (SPDX + CycloneDX) paired with continuous
+          vulnerability rescanning.</span></li>
+      <li><b>Secret lifecycle automation pattern.</b>
+        <span>Generation, sealing, GitOps deployment, and Git-based audit logging in one
+          automated flow.</span></li>
+      <li><b>Non-blocking AI-assisted runtime reporting.</b>
+        <span>LLM enrichment augments Falco events without ever gating the primary alert
+          path.</span></li>
+      <li><b>Evidence-based evaluation methodology.</b>
+        <span>Maps implementation artefacts to NIST&nbsp;SP&nbsp;800-207 tenets and MITRE
+          ATT&amp;CK for Containers techniques, rather than relying on design claims alone.</span></li>
+    </ol>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <p>A six-layer, defence-in-depth design &mdash; infrastructure, Kubernetes platform,
+      application, CI/CD and GitOps, runtime security, and observability &mdash; so that no
+      single missed control causes a complete failure.</p>
+    <figure>
+      <img src="thesis/diagrams/figure-01-six-layer-architecture.png" alt="Six-layer Zero-Trust DevSecOps architecture diagram">
+      <figcaption>Fig. 1 &mdash; Six-layer Zero-Trust DevSecOps architecture</figcaption>
+    </figure>
+  </section>
+
+  <section id="evaluation">
+    <h2>Evaluation Highlights</h2>
+    <p>Full methodology, tables, and discussion are in the thesis and paper; headline results:</p>
+    <table>
+      <tr><th>Metric</th><th>Result</th></tr>
+      <tr><td>NIST SP 800-207 Zero Trust tenets satisfied</td><td>7 / 7</td></tr>
+      <tr><td>Policy and runtime rules enforced (Kyverno + OPA + Falco)</td><td>39</td></tr>
+      <tr><td>Security tools integrated across CI/CD</td><td>10, across 6 pipelines</td></tr>
+      <tr><td>MITRE ATT&amp;CK for Containers techniques covered</td><td>13, across 8 / 12 tactics</td></tr>
+      <tr><td>CI/CD gates tested against injected critical CVEs / policy violations</td><td>Blocked in all tested cases</td></tr>
+      <tr><td>Measured runtime detection latency (Falco / eBPF)</td><td>&lt; 30 seconds</td></tr>
+    </table>
+  </section>
+
+  <section id="stack">
+    <h2>System &amp; Tech Stack</h2>
+    <div class="two-col">
+      <div>
+        <p style="color:var(--muted);margin-bottom:10px">FreshBonds &mdash; a demonstration
+          farm-to-table microservices application used as the subject system:</p>
+        <div class="stack-list">
+          <span class="pill">React + Vite</span>
+          <span class="pill">Node.js / Express</span>
+          <span class="pill">MongoDB Atlas</span>
+          <span class="pill">Kubernetes 1.28</span>
+          <span class="pill">Argo CD</span>
+          <span class="pill">Terraform / OCI</span>
+        </div>
+      </div>
+      <div>
+        <p style="color:var(--muted);margin-bottom:10px">Security &amp; compliance controls
+          across the delivery lifecycle:</p>
+        <div class="stack-list">
+          <span class="pill">Kyverno</span>
+          <span class="pill">Open Policy Agent</span>
+          <span class="pill">Trivy</span>
+          <span class="pill">Syft (SBOM)</span>
+          <span class="pill">Checkov</span>
+          <span class="pill">Gitleaks</span>
+          <span class="pill">Falco (eBPF)</span>
+          <span class="pill">Sealed Secrets</span>
+          <span class="pill">Prometheus / Grafana / Loki</span>
+          <span class="pill">Azure OpenAI enrichment</span>
+        </div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:28px">
+      <div class="card">
+        <h3>Documentation</h3>
+        <p>Architecture, security, workflow, and deployment guides live in
+          <a href="https://github.com/emiresh/zero-trust-devsecops/tree/main/docs">/docs</a>
+          of the repository.</p>
+      </div>
+      <div class="card">
+        <h3>AI Security Collector</h3>
+        <p>A non-blocking FastAPI service that enriches Falco runtime events with Azure OpenAI
+          &mdash; see <a href="https://github.com/emiresh/zero-trust-devsecops/tree/main/research">/research</a>.</p>
+      </div>
+      <div class="card">
+        <h3>Reproducing this work</h3>
+        <p>Terraform, Helm charts, Argo CD manifests, and six GitHub Actions pipelines are all in
+          the repository root &mdash; see the main
+          <a href="https://github.com/emiresh/zero-trust-devsecops#readme">README</a> for setup.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="cite">
+    <h2>Citation</h2>
+    <p>If you use this work, please cite the thesis:</p>
+    <div class="bibtex">@mastersthesis{ekanayaka2026zerotrust,
+  title  = {Automating Continuous Compliance in DevSecOps Through Zero Trust:
+            A Kubernetes Microservices Reference Implementation},
+  author = {Ekanayaka, EMIM},
+  school = {University of Colombo School of Computing (UCSC)},
+  year   = {2026},
+  type   = {Master's thesis (MIS)}
+}</div>
+  </section>
+
+  <section id="license">
+    <h2>License</h2>
+    <p>Released as an open research project so the framework and findings can be freely reused.</p>
+    <div class="license-row">
+      <span class="pill">Code &mdash; MIT License</span>
+      <span class="pill">Thesis, paper &amp; docs &mdash; CC BY 4.0</span>
+    </div>
+  </section>
+
+  <footer>
+    <p>EMIM Ekanayaka &middot; Master of Information Security (MIS), University of Colombo School
+      of Computing (UCSC) &middot; <a href="https://github.com/emiresh/zero-trust-devsecops">github.com/emiresh/zero-trust-devsecops</a></p>
+  </footer>
+</div>
+
+</body>
+</html>

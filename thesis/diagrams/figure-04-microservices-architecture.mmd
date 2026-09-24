@@ -1,0 +1,30 @@
+graph LR
+    CLIENT((Client<br/>Browser)) --> ING_F[NGINX Ingress<br/>TLS Termination]
+    ING_F --> FE_S[Frontend<br/>React + Nginx<br/>Port 80]
+    ING_F --> GW_S[API Gateway<br/>Express.js<br/>Port 8080]
+
+    GW_S --> US_S[User Service<br/>Express.js<br/>Port 3001]
+    GW_S --> PS_S[Product Service<br/>Express.js<br/>Port 3002]
+
+    US_S --> MONGO[(MongoDB Atlas<br/>TLS + Encryption)]
+    PS_S --> MONGO
+
+    GW_S --> IPG[IPG Payment<br/>Gateway]
+
+    subgraph "Security Controls"
+        S1[Helmet CSP/HSTS]
+        S2[Rate Limiting]
+        S3[JWT Auth]
+        S4[bcrypt-14 Hashing]
+        S5[RBAC + Ownership]
+        S6[Input Validation]
+        S7[Audit Logging]
+    end
+
+    GW_S --- S1
+    GW_S --- S2
+    US_S --- S3
+    US_S --- S4
+    PS_S --- S5
+    PS_S --- S6
+    US_S --- S7

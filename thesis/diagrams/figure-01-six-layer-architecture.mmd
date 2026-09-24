@@ -1,0 +1,68 @@
+graph TB
+    subgraph "Layer 6: Observability"
+        PROM[Prometheus<br/>22 Alert Rules]
+        GRAF[Grafana<br/>Dashboards]
+        LOKI[Loki<br/>14 Log Alerts]
+        PD[PagerDuty<br/>Incident Routing]
+        AI[AI Security Collector<br/>GPT-4o-mini Enrichment]
+    end
+
+    subgraph "Layer 5: Runtime Security"
+        FALCO[Falco eBPF<br/>14 Custom Rules]
+        FSDK[Falcosidekick<br/>Event Routing]
+    end
+
+    subgraph "Layer 4: CI/CD Pipeline"
+        PR[PR Validation<br/>Gitleaks, ESLint, kubeval]
+        CICD[App CI/CD<br/>Trivy, Checkov, Syft, OPA, Kyverno]
+        TF_P[Terraform Pipeline<br/>Checkov IaC Scan]
+        SEC[Security Scan<br/>Monthly Audit]
+        ROT[Secret Rotation<br/>Monthly Rotation]
+        AIC[AI Collector CI/CD<br/>Build and Deploy]
+    end
+
+    subgraph "Layer 3: Application"
+        FE[Frontend<br/>React + Vite + Nginx]
+        GW[API Gateway<br/>Helmet, Rate Limit, CORS]
+        US[User Service<br/>JWT, bcrypt-14, RBAC]
+        PS[Product Service<br/>Ownership, Validation]
+    end
+
+    subgraph "Layer 2: Platform"
+        K8S[Kubernetes 1.28<br/>3-Node Cluster]
+        ARGO[Argo CD<br/>GitOps Self-Heal]
+        HELM[Helm Charts<br/>Security Contexts]
+        SEAL[Sealed Secrets<br/>Encryption at Rest]
+        CERT[cert-manager<br/>Let's Encrypt TLS]
+        ING[NGINX Ingress<br/>TLS Termination]
+    end
+
+    subgraph "Layer 1: Infrastructure"
+        OCI[Oracle Cloud<br/>Infrastructure]
+        VCN[VCN 10.0.0.0/16<br/>Public + Private Subnets]
+        CP[Control Plane<br/>ARM64 2vCPU 8GB]
+        W1[Worker 1<br/>ARM64 1vCPU 8GB]
+        W2[Worker 2<br/>ARM64 1vCPU 8GB]
+    end
+
+    FALCO --> FSDK --> AI
+    FSDK --> PROM
+    FSDK --> LOKI
+    AI --> LOKI
+    PROM --> GRAF
+    LOKI --> GRAF
+    PROM --> PD
+    GRAF --> PD
+
+    CICD --> ARGO
+    ARGO --> K8S
+    K8S --> FE
+    K8S --> GW
+    GW --> US
+    GW --> PS
+
+    OCI --> VCN
+    VCN --> CP
+    VCN --> W1
+    VCN --> W2
+    CP --> K8S

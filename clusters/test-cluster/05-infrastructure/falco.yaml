@@ -1,0 +1,349 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: monitoring
+spec:
+  project: default
+  source:
+    repoURL: https://falcosecurity.github.io/charts
+    targetRevision: 7.0.0  # Falco 0.42.0 with kernel 6.8+ support
+    chart: falco
+    helm:
+      values: |
+        # Falco configuration - v0.42.0 with kernel 6.8+ support
+        # Use modern eBPF for Oracle Cloud ARM
+        driver:
+          enabled: true
+          kind: modern_ebpf
+        
+        # Enable gRPC output for falcosidekick
+        grpc:
+          enabled: true
+          bind_address: "0.0.0.0:5060"
+        
+        # Enable HTTP output
+        http_output:
+          enabled: true
+          url: "http://falcosidekick:2801"
+        
+        # Optimized for low-resource cluster (1 CPU nodes)
+        resources:
+          requests:
+            cpu: 30m
+            memory: 64Mi
+          limits:
+            cpu: 150m
+            memory: 128Mi
+        
+        # Falco rules configuration
+        falco:
+          rules_files:
+            - /etc/falco/falco_rules.yaml
+            - /etc/falco/falco_rules.local.yaml
+            - /etc/falco/k8s_audit_rules.yaml
+            - /etc/falco/rules.d
+          
+          # Priority level for rules (debug, informational, notice, warning, error, critical, alert, emergency)
+          priority: notice
+          
+          # Output configuration
+          json_output: true
+          json_include_output_property: true
+          
+          # Buffer size
+          syscall_event_drops:
+            actions:
+              - log
+              - alert
+            rate: 0.03333
+            max_burst: 1
+        
+        # Custom rules
+        customRules:
+          custom-rules.yaml: |-
+            # Custom security rules for your cluster
+
+            # Detect shell spawned in container
+            - rule: Shell Spawned in Container
+              desc: A shell was spawned in a container
+              condition: >
+                spawned_process and
+                container and
+                shell_procs and
+                proc.tty != 0
+              output: >
+                Shell spawned in container (user=%user.name container=%container.name
+                shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline terminal=%proc.tty
+                image=%container.image.repository)
+              priority: WARNING
+              tags: [container, shell, mitre_execution]
+            
+            # Detect package management in container - simplified
+            - rule: Package Management in Container
+              desc: Package management tools executed in container
+              condition: >
+                spawned_process and
+                container and
+                proc.name in (apt, apt-get, yum, dnf, rpm, dpkg, apk, pip, pip3, npm, yarn)
+              output: >
+                Package management process in container (user=%user.name
+                command=%proc.cmdline container=%container.name
+                image=%container.image.repository:%container.image.tag)
+              priority: WARNING
+              tags: [container, process, mitre_persistence]
+            
+            # Detect crypto mining
+            - rule: Detect Crypto Mining
+              desc: Detect cryptocurrency miners
+              condition: >
+                spawned_process and
+                (proc.name in (xmrig, cpuminer, ethminer, ccminer) or
+                 proc.cmdline contains "stratum+tcp" or
+                 proc.cmdline contains "xmr-stak" or
+                 proc.cmdline contains "xmrig" or
+                 proc.cmdline contains "minerd")
+              output: >
+                Crypto mining activity detected (user=%user.name
+                command=%proc.cmdline container=%container.name)
+              priority: CRITICAL
+              tags: [process, mitre_impact]
+            
+            # Detect sensitive file reads
+            - rule: Read Sensitive File
+              desc: Detect reads of sensitive files like /etc/shadow, /etc/passwd, private keys
+              condition: >
+                open_read and
+                fd.name in (/etc/shadow, /etc/passwd, /etc/sudoers, /root/.ssh/id_rsa,
+                            /root/.ssh/id_dsa, /root/.aws/credentials, /root/.kube/config)
+              output: >
+                Sensitive file read (user=%user.name file=%fd.name
+                container=%container.name command=%proc.cmdline
+                image=%container.image.repository)
+              priority: WARNING
+              tags: [filesystem, mitre_credential_access]
+            
+            # Detect privilege escalation
+            - rule: Privilege Escalation via Setuid
+              desc: Detect privilege escalation attempts using setuid
+              condition: >
+                evt.type = setuid and
+                evt.arg.uid = 0
+              output: >
+                Privilege escalation to root detected (user=%user.name
+                command=%proc.cmdline container=%container.name
+                parent=%proc.pname)
+              priority: CRITICAL
+              tags: [process, mitre_privilege_escalation]
+            
+            # Detect reverse shells
+            - rule: Reverse Shell
+              desc: Detect common reverse shell patterns
+              condition: >
+                spawned_process and
+                ((proc.name in (nc, ncat, netcat, socat) and
+                  (proc.cmdline contains "-e" or proc.cmdline contains "/bin/sh" or
+                   proc.cmdline contains "/bin/bash")) or
+                 (proc.name in (python, python3) and
+                  proc.cmdline contains "socket" and
+                  proc.cmdline contains "subprocess") or
+                 (proc.name in (perl, ruby, php) and
+                  proc.cmdline contains "socket"))
+              output: >
+                Reverse shell detected (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [network, shell, mitre_execution]
+            
+            # Detect container escape attempts
+            - rule: Container Escape Attempt
+              desc: Detect attempts to escape container
+              condition: >
+                spawned_process and
+                container and
+                (proc.cmdline contains "nsenter" or
+                 proc.cmdline contains "docker" or
+                 proc.cmdline contains "runc" or
+                 proc.name in (nsenter, docker, runc, ctr, crictl))
+              output: >
+                Container escape attempt (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [container, mitre_privilege_escalation]
+            
+            # Detect suspicious network activity
+            - rule: Outbound Connection to Suspicious Port
+              desc: Detect connections to commonly exploited ports
+              condition: >
+                evt.type = connect and
+                fd.sport in (22, 23, 445, 3389, 4444, 5555, 6666, 7777, 8888, 9999) and
+                not fd.sip in (127.0.0.1, "::1")
+              output: >
+                Suspicious outbound connection (port=%fd.sport process=%proc.name
+                command=%proc.cmdline container=%container.name
+                destination=%fd.sip:%fd.sport)
+              priority: WARNING
+              tags: [network, mitre_command_and_control]
+            
+            # Detect suspicious file modifications
+            - rule: Suspicious File Modification
+              desc: Detect modifications to system files
+              condition: >
+                open_write and
+                fd.name in (/etc/passwd, /etc/shadow, /etc/sudoers, /etc/hosts,
+                            /root/.ssh/authorized_keys, /etc/crontab)
+              output: >
+                Suspicious file modification (user=%user.name file=%fd.name
+                command=%proc.cmdline container=%container.name)
+              priority: CRITICAL
+              tags: [filesystem, mitre_persistence]
+            
+            # Detect reconnaissance activity
+            - rule: Network Reconnaissance
+              desc: Detect network scanning and reconnaissance
+              condition: >
+                spawned_process and
+                proc.name in (nmap, masscan, zmap, nc, netcat, ncat)
+              output: >
+                Network reconnaissance detected (user=%user.name command=%proc.cmdline
+                container=%container.name image=%container.image.repository)
+              priority: WARNING
+              tags: [network, mitre_discovery]
+            
+            # Detect suspicious DNS tools in containers
+            - rule: Suspicious DNS Query
+              desc: Detect use of DNS lookup tools inside containers
+              condition: >
+                spawned_process and
+                container and
+                proc.name in (dig, nslookup, host) and
+                not k8s.ns.name in (kube-system)
+              output: >
+                Suspicious DNS tool executed in container (user=%user.name
+                command=%proc.cmdline container=%container.name
+                image=%container.image.repository)
+              priority: WARNING
+              tags: [network, mitre_command_and_control]
+            
+            # Detect data exfiltration
+            - rule: Large Data Transfer
+              desc: Detect potentially suspicious large data transfers
+              condition: >
+                evt.type = write and
+                fd.type = ipv4 and
+                evt.rawres > 1048576 and
+                not k8s.ns.name in (kube-system, kube-flannel, monitoring)
+              output: >
+                Large data transfer detected (size=%evt.rawres bytes
+                process=%proc.name destination=%fd.sip:%fd.sport
+                container=%container.name)
+              priority: WARNING
+              tags: [network, mitre_exfiltration]
+            
+            # Detect reading sensitive files
+            - macro: sensitive_files
+              condition: >
+                (fd.name startswith /etc/shadow or
+                 fd.name startswith /etc/sudoers or
+                 fd.name startswith /etc/pam.d or
+                 fd.name startswith /etc/security or
+                 fd.name startswith /root/.ssh or
+                 fd.name startswith /root/.aws or
+                 fd.name startswith /root/.kube or
+                 fd.name contains ".dockercfg" or
+                 fd.name contains "id_rsa" or
+                 fd.name contains "id_dsa" or
+                 fd.name contains "id_ed25519" or
+                 fd.name contains "known_hosts")
+            
+            - macro: trusted_containers
+              condition: >
+                (container.image.repository in (gcr.io/google_containers/hyperkube-amd64,
+                 gcr.io/google_containers/kube-proxy, k8s.gcr.io/kube-proxy,
+                 quay.io/coreos/flannel, calico/node))
+            
+            - rule: Read sensitive file untrusted
+              desc: Detect attempts to read sensitive files like passwords, ssh keys, or cloud credentials
+              condition: >
+                open_read and
+                sensitive_files and
+                not trusted_containers
+              output: >
+                Sensitive file opened for reading (user=%user.name user_uid=%user.uid
+                file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline
+                container=%container.name image=%container.image.repository:%container.image.tag)
+              priority: WARNING
+              tags: [filesystem, mitre_credential_access]
+        
+        # Service account
+        serviceAccount:
+          create: true
+          name: falco
+        
+        # Enable RBAC
+        rbac:
+          create: true
+        
+        # Tolerations to run on all nodes
+        tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+        
+        # Enable falcosidekick for alert routing
+        falcosidekick:
+          enabled: true
+          replicaCount: 1
+          
+          # Falcosidekick configuration
+          config:
+            # AlertManager integration (using v2 API)
+            alertmanager:
+              hostport: "http://kube-prometheus-stack-alertmanager.monitoring:9093"
+              endpoint: "/api/v2/alerts"
+              minimumpriority: "warning"
+              checkcert: false
+            
+            # Slack integration (optional - direct from Falco)
+            slack:
+              webhookurl: ""  # Leave empty to use only AlertManager
+              minimumpriority: "critical"
+            
+            # Additional outputs
+            webhook:
+              address: "http://ai-collector.ai-security:8000/events"
+              minimumpriority: "error"
+            
+            # Custom fields to add to alerts
+            customfields: "environment:production,cluster:test-cluster"
+          
+          # Optimized based on actual usage: 1m CPU, 12Mi memory
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          
+          # Web UI disabled to save resources (3 pods: 2 UI + 1 Redis)
+          webui:
+            enabled: true
+          
+          # Service
+          service:
+            type: ClusterIP
+            port: 2801
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

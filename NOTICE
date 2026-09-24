@@ -1,0 +1,33 @@
+Zero-Trust DevSecOps: A Kubernetes Microservices Reference Implementation
+Copyright (c) 2026 EMIM Ekanayaka
+
+This project is licensed as described in LICENSE (code, MIT) and LICENSE-DOCS
+(written content, CC BY 4.0).
+
+This repository builds on, integrates, and documents the use of the following
+third-party open-source projects. Each is the property of its respective
+maintainers and is used here under its own license; none of these projects
+endorse this work.
+
+  Kubernetes            https://kubernetes.io/
+  Argo CD                https://argo-cd.readthedocs.io/
+  Helm                   https://helm.sh/
+  Terraform               https://www.terraform.io/
+  Open Policy Agent (OPA) https://www.openpolicyagent.org/
+  Kyverno                 https://kyverno.io/
+  Falco                   https://falco.org/
+  Trivy                   https://trivy.dev/
+  Syft                    https://github.com/anchore/syft
+  Checkov                 https://www.checkov.io/
+  Gitleaks                https://github.com/gitleaks/gitleaks
+  Bitnami Sealed Secrets  https://github.com/bitnami-labs/sealed-secrets
+  Prometheus              https://prometheus.io/
+  Grafana                 https://grafana.com/
+  Loki                    https://grafana.com/oss/loki/
+  Alertmanager            https://github.com/prometheus/alertmanager
+  cert-manager             https://cert-manager.io/
+  NGINX Ingress Controller https://kubernetes.github.io/ingress-nginx/
+
+Cloud infrastructure credits used during development and evaluation were
+provided by Oracle Cloud Infrastructure (Always Free Tier) and, for the
+AI-assisted security monitoring component, Microsoft Azure OpenAI Service.

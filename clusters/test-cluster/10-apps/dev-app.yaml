@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: freshbonds-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/emiresh/zero-trust-devsecops.git
+    targetRevision: main
+    path: apps/freshbonds
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

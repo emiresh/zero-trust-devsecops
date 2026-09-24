@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the thesis or the IEEE-format paper below."
+title: "Automating Continuous Compliance in DevSecOps Through Zero Trust: A Kubernetes Microservices Reference Implementation"
+type: software
+authors:
+  - family-names: "Ekanayaka"
+    given-names: "EMIM"
+    affiliation: "University of Colombo School of Computing (UCSC)"
+date-released: 2026-06-01
+license: "MIT"
+repository-code: "https://github.com/emiresh/zero-trust-devsecops"
+keywords:
+  - "Zero Trust Architecture"
+  - "DevSecOps"
+  - "continuous compliance"
+  - "Kubernetes"
+  - "GitOps"
+  - "policy as code"
+  - "Falco"
+  - "eBPF"
+  - "MITRE ATT&CK"
+references:
+  - type: thesis
+    title: "Automating Continuous Compliance in DevSecOps Through Zero Trust"
+    authors:
+      - family-names: "Ekanayaka"
+        given-names: "EMIM"
+    thesis-type: "Master's thesis (MIS)"
+    institution:
+      name: "University of Colombo School of Computing (UCSC)"
+    year: 2026

@@ -1,0 +1,234 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-security-collector
+  namespace: ai-security
+  labels:
+    app: ai-security-collector
+    component: collector
+spec:
+  replicas: 1  # Single replica for data consistency during research
+  selector:
+    matchLabels:
+      app: ai-security-collector
+  template:
+    metadata:
+      labels:
+        app: ai-security-collector
+        component: collector
+    spec:
+      # Security context (non-root, no privileges)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001  # High UID to avoid host conflict (CKV_K8S_40)
+        fsGroup: 10001
+        seccompProfile:  # CKV_K8S_31: Seccomp profile required
+          type: RuntimeDefault
+      serviceAccountName: ai-security-collector
+      automountServiceAccountToken: false  # CKV_K8S_38: Only mount when necessary
+      
+      # Prefer scheduling on different node from Prometheus and Grafana
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - prometheus
+                  - grafana
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: ai-security-collector
+      
+      containers:
+      - name: collector
+        image: emiresh/ai-security-collector:v1.0.29
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        # Resource limits (lightweight service)
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true  # Read-only except /data volume
+          capabilities:
+            drop:
+            - ALL
+        
+        # Environment variables
+        env:
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-kube-prometheus-stack-prometheus.monitoring:9090"
+        - name: LOKI_URL
+          value: "http://loki-stack.monitoring:3100"
+        - name: AI_DEDUP_WINDOW_SECONDS
+          value: "60"
+        - name: DATA_DIR
+          value: "/data"
+        
+        # Azure OpenAI credentials (for AI-enhanced incident reports)
+        - name: AZURE_OPENAI_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: endpoint
+        - name: AZURE_OPENAI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: api-key
+        - name: AZURE_OPENAI_DEPLOYMENT
+          valueFrom:
+            secretKeyRef:
+              name: azure-openai-secret
+              key: deployment
+        
+        # Integration webhooks (optional - graceful degradation if not set)
+        # Note: PagerDuty integration handled by AlertManager (immediate alerts)
+        # AI Collector uses Slack for team collaboration with AI-enhanced context
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-collector-integrations
+              key: slack-webhook-url
+              optional: true
+        - name: CUSTOM_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-collector-integrations
+              key: custom-webhook-url
+              optional: true
+        
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp  # Needed because readOnlyRootFilesystem=true
+          mountPath: /tmp
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-security-data
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-security-data
+  namespace: ai-security
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path  # Same as your existing cluster
+  resources:
+    requests:
+      storage: 5Gi  # Enough for ~1M Falco events
+---
+# NetworkPolicy to satisfy CKV2_K8S_6
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-security-collector-policy
+  namespace: ai-security
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-security-collector
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow Prometheus (metrics scraping)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow Loki (log aggregation)
+  - to:
+    - podSelector:
+        matchLabels:
+          app: loki-stack
+      namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3100
+  # Allow Azure OpenAI API (external egress)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# ServiceAccount for ai-security-collector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-security-collector
+  namespace: ai-security
+automountServiceAccountToken: false

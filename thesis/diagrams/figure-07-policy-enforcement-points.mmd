@@ -1,0 +1,28 @@
+graph LR
+    subgraph "Pre-Merge (PR Validation)"
+        GL_P[Gitleaks<br/>Secret Scan]
+        KV_P[kubeval<br/>Manifest Check]
+    end
+
+    subgraph "Build (App CI/CD)"
+        OPA_P[OPA/Conftest<br/>16 Rego Rules]
+        KYV_P[Kyverno CLI<br/>9 YAML Rules]
+        TRV_P[Trivy<br/>CVE + Secret]
+        CHK_P[Checkov<br/>Config Scan]
+    end
+
+    subgraph "Deploy (Admission Control)"
+        KYV_A[Kyverno<br/>ClusterPolicy<br/>Enforce Mode]
+    end
+
+    subgraph "Runtime (Monitoring)"
+        FAL_P[Falco<br/>14 eBPF Rules]
+    end
+
+    GL_P --> OPA_P
+    KV_P --> OPA_P
+    OPA_P --> KYV_A
+    KYV_P --> KYV_A
+    TRV_P --> KYV_A
+    CHK_P --> KYV_A
+    KYV_A --> FAL_P

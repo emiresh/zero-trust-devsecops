@@ -1,0 +1,22 @@
+graph TB
+    subgraph "Oracle Cloud Infrastructure"
+        subgraph "VCN: 10.0.0.0/16"
+            subgraph "Public Subnet: 10.0.0.0/24"
+                IGW[Internet Gateway]
+                CP_N[Control Plane<br/>10.0.0.x<br/>VM.Standard.A1.Flex<br/>2 vCPU · 8 GB RAM]
+            end
+            subgraph "Private Subnet: 10.0.1.0/24"
+                NAT[NAT Gateway]
+                W1_N[Worker 1<br/>10.0.1.x<br/>VM.Standard.A1.Flex<br/>1 vCPU · 8 GB RAM]
+                W2_N[Worker 2<br/>10.0.1.x<br/>VM.Standard.A1.Flex<br/>1 vCPU · 8 GB RAM]
+            end
+        end
+        LB[Oracle Cloud<br/>Load Balancer]
+        OBJ[Object Storage<br/>Terraform State]
+    end
+
+    INET((Internet)) --> LB --> IGW --> CP_N
+    CP_N --> W1_N
+    CP_N --> W2_N
+    W1_N --> NAT --> INET
+    W2_N --> NAT
